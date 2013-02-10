@@ -13,22 +13,33 @@
 namespace llvm {
 
   BitVector DataFlow::transferFunctionBB(BasicBlock* bb, BitVector before) {
-      BitVector curr = before;
-      if (direction == FORWARDS) {
-        for (BasicBlock::iterator iter = bb->begin(), end = bb->end();
-            iter != end; ++iter) {
-          Instruction* inst = iter;
-          curr = transferFunction(inst, curr);
-        }
-      } else {
-        BasicBlock::InstListType& il = bb->getInstList();
-        for (BasicBlock::InstListType::reverse_iterator iter = il.rbegin(),
-            end = il.rend(); iter != end; ++iter) {
-          Instruction* inst = &(*iter); // Stupid STL
-          curr = transferFunction(inst, curr);
-        }
+    std::map<Instruction*, BitVector> dummy;
+    return instTransferFunc(bb, before, dummy);
+  }
+
+  BitVector DataFlow::instTransferFunc(BasicBlock* bb, BitVector before,
+        std::map<Instruction*, BitVector>& map) {
+    BitVector curr = before;
+
+    if (direction == FORWARDS) {
+      for (BasicBlock::iterator iter = bb->begin(), end = bb->end();
+          iter != end; ++iter) {
+        Instruction* inst = iter;
+        curr = transferFunction(inst, curr);
+        map[inst] = curr;
+      }
+    } else {
+      BasicBlock::InstListType& il = bb->getInstList();
+      for (BasicBlock::InstListType::reverse_iterator iter = il.rbegin(),
+          end = il.rend(); iter != end; ++iter) {
+        Instruction* inst = &(*iter); // Stupid STL
+        curr = transferFunction(inst, curr);
+        map[inst] = curr;
       }
     }
+
+    return curr;
+  }
 
   std::map<Instruction*, BitVector> DataFlow::doAnalysis(Function& f) {
     std::map<BasicBlock*, BVPair> bbStartEnd;
@@ -119,7 +130,16 @@ namespace llvm {
     }
 
 
-    // Step 3: iterate through each basic block to get BitVector for each inst
+    // iterate through each basic block to get BitVector for each inst
+    std::map<Instruction*, BitVector> result;
+    for (std::map<BasicBlock*, BVPair>::iterator iter = bbStartEnd.begin(),
+         end = bbStartEnd.end(); iter != end; ++iter) {
+      BitVector& before = (direction == FORWARDS) ? iter->second.first :
+                          iter->second.second;
+      instTransferFunc(iter->first, before, result);
+    }
+
+    return result;
   }
 
   void DataFlow::postOrder(BasicBlock* bb, std::deque<BasicBlock*> &q,

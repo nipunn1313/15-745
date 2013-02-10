@@ -41,6 +41,8 @@ class DataFlow {
 
   void postOrder(BasicBlock* bb, std::deque<BasicBlock*> &q,
                  std::map<BasicBlock*, bool> &visited);
+  BitVector instTransferFunc(BasicBlock* bb, BitVector before,
+        std::map<Instruction*, BitVector>& map);
 
   public:
   DataFlow(BitVector b, BitVector t, Direction d) :
