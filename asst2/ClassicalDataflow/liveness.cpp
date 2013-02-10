@@ -16,10 +16,31 @@ class Liveness : public FunctionPass {
  public:
   static char ID;
 
+  class LivenessDF : DataFlow {
+    private:
+      std::map<Value*, int>* map;
+
+    public:
+      Liveness(std::map<Value*, int>* map) :
+      DataFlow(emptySet(map->size()), emptySet(map->size()), BACKWARDS) {
+      }
+
+      virtual BitVector transferFunction(Instruction inst, BitVector before) {
+        // (before - kill) U vars_used
+
+          // TODO
+      }
+  }
+
   Liveness() : FunctionPass(ID) { }
 
   virtual bool runOnFunction(Function& F) {
-    ExampleFunctionPrinter(errs(), F);
+    //ExampleFunctionPrinter(errs(), F);
+
+    // Make one pass through to find all variables. create map
+
+    LivenessDF ldf(map);
+    ldf.doAnalysis();
 
     // Did not modify the incoming Function.
     return false;
