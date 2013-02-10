@@ -26,10 +26,10 @@ class DataFlow {
     BACKWARDS
   };
   BitVector emptySet(int s) {
-    BitVector(s, false);
+    return BitVector(s, false);
   }
   BitVector universalSet(int s) {
-    BitVector(s, true);
+    return BitVector(s, true);
   }
 
   private:

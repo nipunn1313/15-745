@@ -43,10 +43,10 @@ class Liveness : public FunctionPass {
 
     // Make one pass through to find all variables.
     std::vector<Value*> varList;
-    std::map<Value*, int>* varMap;
+    std::map<Value*, int> varMap;
 
     // Run analysis to get instruction -> bitmap
-    LivenessDF ldf(varMap);
+    LivenessDF ldf(&varMap);
     std::map<Instruction*, BitVector> result = ldf.doAnalysis(F);
 
     // Output!
@@ -55,7 +55,7 @@ class Liveness : public FunctionPass {
       Instruction* inst = &(*iter);
       fprintf(stderr, "Live: {");
       BitVector& bits = result[inst];
-      for (int i=0; i<bits.size(); i++) {
+      for (unsigned i=0; i<bits.size(); i++) {
         if (bits[i]) {
           Value* v = varList[i];
           v->print(errs());

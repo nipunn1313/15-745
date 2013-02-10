@@ -1,6 +1,6 @@
 all: liveness.so reaching-definitions.so
 
-CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0
+CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0 -Wall -Werror
 
 dataflow.o: dataflow.cpp dataflow.h
 

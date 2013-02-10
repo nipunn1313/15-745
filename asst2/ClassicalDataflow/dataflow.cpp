@@ -172,7 +172,6 @@ void ExampleFunctionPrinter(raw_ostream& O, const Function& F) {
   for (Function::const_iterator FI = F.begin(), FE = F.end(); FI != FE; ++FI) {
     const BasicBlock* block = FI;
     O << block->getName() << ":\n";
-    const Value* blockValue = block;
     PrintInstructionOps(O, NULL);
     for (BasicBlock::const_iterator BI = block->begin(), BE = block->end();
         BI != BE; ++BI) {
