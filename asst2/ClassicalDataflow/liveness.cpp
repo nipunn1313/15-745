@@ -1,5 +1,5 @@
 // 15-745 S13 Assignment 2: liveness.cpp
-// Group: bovik, bovik2
+// Group: nkoorapa, pdixit
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "llvm/Function.h"
@@ -21,16 +21,16 @@ class Liveness : public FunctionPass {
       std::map<Value*, int>* map;
 
     public:
-      Liveness(std::map<Value*, int>* map) :
+      LivenessDF(std::map<Value*, int>* map) :
       DataFlow(emptySet(map->size()), emptySet(map->size()), BACKWARDS) {
       }
 
-      virtual BitVector transferFunction(Instruction inst, BitVector before) {
+      virtual BitVector transferFunction(Instruction* inst, BitVector before) {
         // (before - kill) U vars_used
 
           // TODO
       }
-  }
+  };
 
   Liveness() : FunctionPass(ID) { }
 
@@ -39,8 +39,8 @@ class Liveness : public FunctionPass {
 
     // Make one pass through to find all variables. create map
 
-    LivenessDF ldf(map);
-    ldf.doAnalysis();
+    //LivenessDF ldf(map);
+    //ldf.doAnalysis();
 
     // Did not modify the incoming Function.
     return false;

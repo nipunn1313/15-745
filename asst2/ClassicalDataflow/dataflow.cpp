@@ -1,67 +1,43 @@
 // 15-745 S13 Assignment 2: dataflow.cpp
-// Group: bovik, bovik2
-////////////////////////////////////////////////////////////////////////////////
+// Group: nkoorapa, pdixit
+///////////////////////////////////////////////////////////////////////////////
 
 #include "dataflow.h"
+
 #include "llvm/ADT/BitVector.h"
+#include "llvm/ADT/ilist.h"
+#include "llvm/BasicBlock.h"
+
+#include <deque>
 
 namespace llvm {
 
-virtual class DataFlow {
-  private:
-  BitVector boundary;
-  BitVector top;
-  Direction direction;
-
-  typedef std::pair<BitVector, BitVector> BVPair;
-  enum Direction {
-    FORWARDS,
-    BACKWARDS
-  };
-
-  BitVector emptySet(int s) {
-    BitVector(s, false);
-  }
-  BitVector universalSet(int s) {
-    BitVector(s, true);
-  }
-
-  public:
-  DataFlow(BitVector& boundary, BitVector& top, Direction direction) {
-    this->boundary = boundary;
-    this->top = top;
-    this->forwards = forwards;
-  }
-
-  virtual BitVector transferFunction(Instruction* inst, BitVector before);
-  virtual BitVector transferFunction(BasicBlock* bb, BitVector before) {
-    BitVector curr = before;
-    if (direction == FORWARDS) {
-      for (BasicBlock::iterator iter = bb.begin(), end = bb.end();
-           iter != end; ++iter) {
-        Instruction* inst = iter;
-        curr = transferFunction(inst, curr);
-      }
-    } else {
-      for (BasicBlock::reverse_iterator iter = bb.rbegin(), end = bb.rend();
-           iter != end; ++iter) {
-        Instruction* inst = iter;
-        curr = transferFunction(inst, curr);
+  BitVector DataFlow::transferFunctionBB(BasicBlock* bb, BitVector before) {
+      BitVector curr = before;
+      if (direction == FORWARDS) {
+        for (BasicBlock::iterator iter = bb->begin(), end = bb->end();
+            iter != end; ++iter) {
+          Instruction* inst = iter;
+          curr = transferFunction(inst, curr);
+        }
+      } else {
+        BasicBlock::InstListType& il = bb->getInstList();
+        for (BasicBlock::InstListType::reverse_iterator iter = il.rbegin(),
+            end = il.rend(); iter != end; ++iter) {
+          Instruction* inst = &(*iter); // Stupid STL
+          curr = transferFunction(inst, curr);
+        }
       }
     }
-  }
 
-  // TODO Maybe take an array?
-  virtual BitVector meet(BitVector left, BitVector right);
-
-  std::map<Instruction*, BitVector> doAnalysis(Function& f) {
+  std::map<Instruction*, BitVector> DataFlow::doAnalysis(Function& f) {
     std::map<BasicBlock*, BVPair> bbStartEnd;
     std::vector<BasicBlock*> exitBlocks;
     BasicBlock* entryBlock = &(f.getEntryBlock());
 
     // Initialize every basic block's bit vectors to TOP
     for (Function::iterator iter = f.begin(), end = f.end();
-         iter != end; ++iter) {
+        iter != end; ++iter) {
       BasicBlock* bb = iter;
       bbStartEnd[bb] = BVPair(top, top);
 
@@ -71,8 +47,16 @@ virtual class DataFlow {
         exitBlocks.push_back(bb);
       }
     }
+    if (direction == FORWARDS) {
+      bbStartEnd[entryBlock].first = boundary;
+    } else {
+      for (std::vector<BasicBlock*>::iterator iter = exitBlocks.begin(),
+          end = exitBlocks.end(); iter != end; ++iter) {
+        bbStartEnd[*iter].second = boundary;
+      }
+    }
 
-    std::queue<BasicBlock*> worklist;
+    std::deque<BasicBlock*> worklist;
 
     // Initialize worklist to either forward or reverse postorder
     std::map<BasicBlock*, bool> visited;
@@ -86,42 +70,46 @@ virtual class DataFlow {
     while (!worklist.empty()) {
       BasicBlock* bb = worklist.front();
       BVPair& bvp = bbStartEnd[bb];
-      worklist.pop();
+      worklist.pop_front();
 
       BitVector& before = (direction == FORWARDS) ?
-                          bvp.first : bvp.second;
+        bvp.first : bvp.second;
       BitVector& after = (direction == FORWARDS) ?
-                          bvp.second : bvp.first;
+        bvp.second : bvp.first;
 
       if (direction == FORWARDS) {
-        for (pred_iterator iter = pred_begin(bb), end = pred_end(bb)) {
-          before = meet(before, bbStartEnd[iter].second);
+        for (pred_iterator iter = pred_begin(bb), end = pred_end(bb);
+            iter != end; ++iter) {
+          before = meet(before, bbStartEnd[*iter].second);
         }
-        after = transferFunction(bb, before);
-        for (succ_iterator iter = succ_begin(bb), end = succ_end(bb)) {
-          BasicBlock* succBb = iter;
-          BVpair& succBvp = bbStartEnd[succBb];
+        after = transferFunctionBB(bb, before);
+        for (succ_iterator iter = succ_begin(bb), end = succ_end(bb);
+            iter != end; ++iter) {
+          BasicBlock* succBb = *iter;
+          BVPair& succBvp = bbStartEnd[succBb];
           if (succBvp.first != after) {
             succBvp.first = after;
             if (visited[succBb]) {
               visited[succBb] = false;
-              worklist.push(succBb);
+              worklist.push_back(succBb);
             }
           }
         }
       } else {
-        for (succ_iterator iter = succ_begin(bb), end = succ_end(bb)) {
-          before = meet(before, bbStartEnd[iter].first);
+        for (succ_iterator iter = succ_begin(bb), end = succ_end(bb);
+            iter != end; ++iter) {
+          before = meet(before, bbStartEnd[*iter].first);
         }
-        after = transferFunction(bb, before);
-        for (pred_iterator iter = pred_begin(bb), end = pred_end(bb)) {
-          BasicBlock* predBb = iter;
-          BVpair& predBvp = bbStartEnd[predBb];
+        after = transferFunctionBB(bb, before);
+        for (pred_iterator iter = pred_begin(bb), end = pred_end(bb);
+            iter != end; ++iter) {
+          BasicBlock* predBb = *iter;
+          BVPair& predBvp = bbStartEnd[predBb];
           if (predBvp.second != after) {
             predBvp.second = after;
             if (visited[predBb]) {
               visited[predBb] = false;
-              worklist.push(predBb);
+              worklist.push_back(predBb);
             }
           }
         }
@@ -134,17 +122,18 @@ virtual class DataFlow {
     // Step 3: iterate through each basic block to get BitVector for each inst
   }
 
-  void postOrder(BasicBlock* bb, std::queue<BasicBlock*> &q,
-                 std::map<BasicBlock*, bool> &visited) {
+  void DataFlow::postOrder(BasicBlock* bb, std::deque<BasicBlock*> &q,
+      std::map<BasicBlock*, bool> &visited) {
     visited[bb] = true;
-    for (child of bb) {
+    for (succ_iterator iter = succ_begin(bb), end = succ_end(bb);
+        iter != end; ++iter) {
+      BasicBlock* child = *iter;
       if (!visited[child]) {
         postOrder(child, q, visited);
       }
     }
-    q.push(bb);
+    q.push_back(bb);
   }
-}
 
 void PrintInstructionOps(raw_ostream& O, const Instruction* I) {
   O << "\nOps: {";
