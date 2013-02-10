@@ -4,6 +4,7 @@
 
 #include "llvm/Function.h"
 #include "llvm/Pass.h"
+#include "llvm/Support/InstIterator.h"
 #include "llvm/Support/raw_ostream.h"
 
 #include "dataflow.h"
@@ -16,7 +17,7 @@ class Liveness : public FunctionPass {
  public:
   static char ID;
 
-  class LivenessDF : DataFlow {
+  class LivenessDF : public DataFlow {
     private:
       std::map<Value*, int>* map;
 
@@ -27,8 +28,11 @@ class Liveness : public FunctionPass {
 
       virtual BitVector transferFunction(Instruction* inst, BitVector before) {
         // (before - kill) U vars_used
+        return before;
+      }
 
-          // TODO
+      virtual BitVector meet(BitVector left, const BitVector& right) {
+        return left |= right;
       }
   };
 
@@ -37,10 +41,32 @@ class Liveness : public FunctionPass {
   virtual bool runOnFunction(Function& F) {
     //ExampleFunctionPrinter(errs(), F);
 
-    // Make one pass through to find all variables. create map
+    // Make one pass through to find all variables.
+    std::vector<Value*> varList;
+    std::map<Value*, int>* varMap;
 
-    //LivenessDF ldf(map);
-    //ldf.doAnalysis();
+    // Run analysis to get instruction -> bitmap
+    LivenessDF ldf(varMap);
+    std::map<Instruction*, BitVector> result = ldf.doAnalysis(F);
+
+    // Output!
+    for (inst_iterator iter = inst_begin(F), end = inst_end(F);
+         iter != end; ++iter) {
+      Instruction* inst = &(*iter);
+      fprintf(stderr, "Live: { ");
+      BitVector& bits = result[inst];
+      for (int i=0; i<bits.size(); i++) {
+        if (bits[i]) {
+          Value* v = varList[i];
+          v->print(errs());
+          fprintf(stderr, "; ");
+        }
+      }
+      fprintf(stderr, "}\n");
+      inst->print(errs());
+      fprintf(stderr, "\n");
+    }
+    fprintf(stderr, "Live: {}\n");
 
     // Did not modify the incoming Function.
     return false;

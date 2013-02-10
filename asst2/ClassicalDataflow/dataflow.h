@@ -50,9 +50,7 @@ class DataFlow {
 
   virtual BitVector transferFunction(Instruction* inst, BitVector before);
   virtual BitVector transferFunctionBB(BasicBlock* bb, BitVector before);
-
-  // TODO Maybe take an array?
-  virtual BitVector meet(BitVector left, BitVector right);
+  virtual BitVector meet(BitVector left, const BitVector& right);
 
   std::map<Instruction*, BitVector> doAnalysis(Function& f);
 };
