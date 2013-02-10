@@ -47,10 +47,11 @@ class DataFlow {
   public:
   DataFlow(BitVector b, BitVector t, Direction d) :
     boundary(b), top(t), direction(d) {}
+  ~DataFlow() {}
 
-  virtual BitVector transferFunction(Instruction* inst, BitVector before);
+  virtual BitVector transferFunction(Instruction* inst, BitVector before) = 0;
   virtual BitVector transferFunctionBB(BasicBlock* bb, BitVector before);
-  virtual BitVector meet(BitVector left, const BitVector& right);
+  virtual BitVector meet(BitVector left, const BitVector& right) = 0;
 
   std::map<Instruction*, BitVector> doAnalysis(Function& f);
 };

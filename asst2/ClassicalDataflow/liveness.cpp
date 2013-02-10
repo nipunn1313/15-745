@@ -23,8 +23,8 @@ class Liveness : public FunctionPass {
 
     public:
       LivenessDF(std::map<Value*, int>* map) :
-      DataFlow(emptySet(map->size()), emptySet(map->size()), BACKWARDS) {
-      }
+        DataFlow(emptySet(map->size()), emptySet(map->size()), BACKWARDS) {}
+      ~LivenessDF() {}
 
       virtual BitVector transferFunction(Instruction* inst, BitVector before) {
         // (before - kill) U vars_used
@@ -53,7 +53,7 @@ class Liveness : public FunctionPass {
     for (inst_iterator iter = inst_begin(F), end = inst_end(F);
          iter != end; ++iter) {
       Instruction* inst = &(*iter);
-      fprintf(stderr, "Live: { ");
+      fprintf(stderr, "Live: {");
       BitVector& bits = result[inst];
       for (int i=0; i<bits.size(); i++) {
         if (bits[i]) {
