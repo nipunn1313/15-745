@@ -41,7 +41,8 @@ class Liveness : public FunctionPass {
       }
       ~LivenessDF() {}
 
-      virtual BitVector transferFunction(Instruction* inst, BitVector before) {
+      // Override
+      BitVector transferFunction(Instruction* inst, BitVector before) {
 
         idxmap_t::iterator it;
 
@@ -65,7 +66,8 @@ class Liveness : public FunctionPass {
         return before;
       }
 
-      virtual BitVector meet(BitVector left, const BitVector& right) {
+      // Override
+      BitVector meet(BitVector left, const BitVector& right) {
         return left |= right;
       }
   };
