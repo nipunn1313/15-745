@@ -19,6 +19,7 @@
 
 namespace llvm {
 
+template<class Param_t>
 class DataFlow {
   protected:
   enum Direction {
@@ -34,6 +35,8 @@ class DataFlow {
 
   private:
   typedef std::pair<BitVector, BitVector> BVPair;
+  std::map<Instruction*, Param_t> paramCache;
+  std::map<BasicBlock*, Param_t> bbParamCache;
 
   BitVector boundary;
   BitVector top;
@@ -43,49 +46,73 @@ class DataFlow {
                  std::map<BasicBlock*, bool> &visited);
   BitVector instTransferFunc(BasicBlock* bb, BitVector before,
         std::map<Instruction*, BitVector>& map);
+  Param_t getCachedTFParams(Instruction* inst);
 
   public:
   DataFlow(BitVector b, BitVector t, Direction d) :
     boundary(b), top(t), direction(d) {}
   ~DataFlow() {}
 
-  virtual BitVector transferFunction(Instruction* inst, BitVector before) = 0;
-  virtual BitVector transferFunctionBB(BasicBlock* bb, BitVector before);
+  BitVector transferFunction(Instruction* inst, BitVector before);
+  BitVector transferFunctionBB(BasicBlock* bb, BitVector before);
+
+  virtual BitVector transferFunctionParams(Param_t params, BitVector before) = 0;
+  virtual Param_t getTFParams(Instruction* inst) = 0;
+  virtual Param_t compose(Param_t a, Param_t b) = 0;
   virtual BitVector meet(BitVector left, const BitVector& right) = 0;
 
   std::map<Instruction*, BitVector> doAnalysis(Function& f);
 };
 
-BitVector DataFlow::transferFunctionBB(BasicBlock* bb, BitVector before) {
-  std::map<Instruction*, BitVector> dummy;
-  return instTransferFunc(bb, before, dummy);
+template<class Param_t> Param_t
+DataFlow<Param_t>::getCachedTFParams(Instruction* inst) {
+  typename std::map<Instruction*, Param_t>::iterator it;
+  it = paramCache.find(inst);
+  if (it != paramCache.end()) {
+    return it->second;
+  } else {
+    Param_t params = getTFParams(inst);
+    paramCache[inst] = params;
+    return params;
+  }
 }
 
-BitVector DataFlow::instTransferFunc(BasicBlock* bb, BitVector before,
-      std::map<Instruction*, BitVector>& map) {
-  BitVector curr = before;
+template<class Param_t> BitVector
+DataFlow<Param_t>::transferFunction(Instruction* inst,
+                                    BitVector before) {
+  return transferFunctionParams(getCachedTFParams(inst), before);
+}
 
-  if (direction == FORWARDS) {
-    for (BasicBlock::iterator iter = bb->begin(), end = bb->end();
-        iter != end; ++iter) {
-      Instruction* inst = iter;
-      curr = transferFunction(inst, curr);
-      map[inst] = curr;
-    }
-  } else {
-    BasicBlock::InstListType& il = bb->getInstList();
-    for (BasicBlock::InstListType::reverse_iterator iter = il.rbegin(),
-        end = il.rend(); iter != end; ++iter) {
-      Instruction* inst = &(*iter); // Stupid STL
-      curr = transferFunction(inst, curr);
-      map[inst] = curr;
+template<class Param_t> BitVector
+DataFlow<Param_t>::transferFunctionBB(BasicBlock* bb, BitVector before) {
+  Param_t params;
+  typename std::map<BasicBlock*, Param_t>::iterator it;
+  typename std::map<Instruction*, Param_t>::iterator it2;
+
+  it = bbParamCache.find(bb);
+  if (it != bbParamCache.end()) {
+    return transferFunctionParams(it->second, before);
+  }
+
+  params = getTFParams(NULL);
+  for (BasicBlock::iterator iter = bb->begin(), end = bb->end();
+       iter != end; ++iter) {
+
+    Instruction* inst = iter;
+    Param_t instParam = getCachedTFParams(inst);
+    if (direction == FORWARDS) {
+      params = compose(params, instParam);
+    } else {
+      params = compose(instParam, params);
     }
   }
 
-  return curr;
+  bbParamCache[bb] = params;
+  return transferFunctionParams(params, before);
 }
 
-std::map<Instruction*, BitVector> DataFlow::doAnalysis(Function& f) {
+template<class Param_t> std::map<Instruction*, BitVector>
+DataFlow<Param_t>::doAnalysis(Function& f) {
   std::map<BasicBlock*, BVPair> bbStartEnd;
   std::vector<BasicBlock*> exitBlocks;
   BasicBlock* entryBlock = &(f.getEntryBlock());
@@ -178,15 +205,32 @@ std::map<Instruction*, BitVector> DataFlow::doAnalysis(Function& f) {
   std::map<Instruction*, BitVector> result;
   for (std::map<BasicBlock*, BVPair>::iterator iter = bbStartEnd.begin(),
        end = bbStartEnd.end(); iter != end; ++iter) {
-    BitVector& before = (direction == FORWARDS) ? iter->second.first :
-                        iter->second.second;
-    instTransferFunc(iter->first, before, result);
+    BasicBlock* bb = iter->first;
+    if (direction == FORWARDS) {
+      BitVector& curr = iter->second.first;
+      for (BasicBlock::iterator bbIt = bb->begin(),
+           bbEnd = bb->end(); bbIt != bbEnd; ++bbIt) {
+        Instruction* inst = bbIt;
+        curr = transferFunction(inst, curr);
+        result[inst] = curr;
+      }
+    } else {
+      BitVector& curr = iter->second.second;
+      BasicBlock::InstListType& il = bb->getInstList();
+      for (BasicBlock::InstListType::reverse_iterator bbIt = il.rbegin(),
+           bbEnd = il.rend(); bbIt != bbEnd; ++bbIt) {
+        Instruction* inst = &(*bbIt); // Stupid STL
+        curr = transferFunction(inst, curr);
+        result[inst] = curr;
+      }
+    }
   }
 
   return result;
 }
 
-void DataFlow::postOrder(BasicBlock* bb, std::deque<BasicBlock*> &q,
+template<class Param_t> void
+DataFlow<Param_t>::postOrder(BasicBlock* bb, std::deque<BasicBlock*> &q,
     std::map<BasicBlock*, bool> &visited) {
   visited[bb] = true;
   for (succ_iterator iter = succ_begin(bb), end = succ_end(bb);

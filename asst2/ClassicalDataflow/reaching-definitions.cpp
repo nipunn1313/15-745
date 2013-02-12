@@ -19,8 +19,9 @@ class ReachingDefinitions : public FunctionPass {
 
   typedef std::map<Value*, std::vector<Instruction*> > defmap_t;
   typedef std::map<Value*, int> idxmap_t;
+  typedef std::pair<BitVector, BitVector> GKPair;
 
-  class RD_DF : public DataFlow {
+  class RD_DF : public DataFlow<GKPair> {
 
     private:
       defmap_t& defMap;
@@ -28,30 +29,51 @@ class ReachingDefinitions : public FunctionPass {
 
     public:
       RD_DF(idxmap_t& idxMap, defmap_t& defMap) :
-        DataFlow(emptySet(idxMap.size()),
-                 emptySet(idxMap.size()), FORWARDS),
+        DataFlow<GKPair>(emptySet(idxMap.size()),
+                         emptySet(idxMap.size()), FORWARDS),
          defMap(defMap), idxMap(idxMap) {}
       ~RD_DF() {}
 
-      // TODO: Use gen/kill sets to compose across basic blocks
-      virtual BitVector transferFunction(Instruction* inst,
-                                         BitVector before) {
-        // Eliminate kill set
-        if (StoreInst* storeInst = dyn_cast<StoreInst>(inst)) {
+      // Override. (in - kill) U gen
+      BitVector transferFunctionParams(GKPair params,
+                                               BitVector before) {
+        return before.reset(params.second) |= params.first;
+      }
+
+      // Override
+      GKPair compose(GKPair a, GKPair b) {
+        // gen = (a.gen - b.kill) U b.gen
+        BitVector gen = a.first;
+        gen.reset(b.second) |= b.first;
+        // kill = a.kill U b.kill
+        BitVector kill = a.second;
+        kill |= b.second;
+        return GKPair::pair(gen, kill);
+      }
+
+      // Override
+      GKPair getTFParams(Instruction* inst) {
+        BitVector gen = emptySet(idxMap.size());
+        BitVector kill = emptySet(idxMap.size());
+
+        if (inst == NULL) {
+          // Do nothing. Identity function on no instruction is empty gen/kill
+        } else if (StoreInst* storeInst = dyn_cast<StoreInst>(inst)) {
           std::vector<Instruction*>& vect =
             defMap[storeInst->getPointerOperand()];
           for (std::vector<Instruction*>::iterator it = vect.begin(),
                end = vect.end(); it != end; ++it) {
-            before[idxMap[*it]] = false;
+            kill[idxMap[*it]] = true;
           }
 
-          before[idxMap[inst]] = true;
+          gen[idxMap[inst]] = true;
         }
 
-        return before;
+        return GKPair::pair(gen, kill);
       }
 
-      virtual BitVector meet(BitVector left, const BitVector& right) {
+      // Override
+      BitVector meet(BitVector left, const BitVector& right) {
         return left |= right;
       }
   };

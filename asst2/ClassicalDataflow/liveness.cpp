@@ -20,14 +20,17 @@ class Liveness : public FunctionPass {
   static char ID;
 
   typedef std::map<Value*, int> idxmap_t;
+  typedef std::pair<BitVector, BitVector> GKPair;
 
-  class LivenessDF : public DataFlow {
+  /* Composeable parameters where parameters are a Gen/Kill pair */
+  class LivenessDF : public DataFlow<GKPair> {
     private:
       idxmap_t* map;
 
     public:
       LivenessDF(idxmap_t* map) :
-        DataFlow(emptySet(map->size()), emptySet(map->size()), BACKWARDS) {
+        DataFlow<GKPair>(emptySet(map->size()),
+                         emptySet(map->size()), BACKWARDS) {
           this->map = map;
 
 #if 0
@@ -41,29 +44,43 @@ class Liveness : public FunctionPass {
       }
       ~LivenessDF() {}
 
+      // Override. (in - kill) U gen
+      BitVector transferFunctionParams(GKPair params, BitVector before) {
+        return before.reset(params.second) |= params.first;
+      }
+
       // Override
-      BitVector transferFunction(Instruction* inst, BitVector before) {
+      GKPair compose(GKPair a, GKPair b) {
+        // gen = (a.gen - b.kill) U b.gen
+        BitVector gen = a.first;
+        gen.reset(b.second) |= b.first;
+        // kill = a.kill U b.kill
+        BitVector kill = a.second;
+        kill |= b.second;
+        return GKPair::pair(gen, kill);
+      }
 
+      GKPair getTFParams(Instruction* inst) {
         idxmap_t::iterator it;
+        BitVector gen = emptySet(map->size());
+        BitVector kill = emptySet(map->size());
 
-        // Eliminate kill set (writing to a variable)
-        if (StoreInst* storeInst = dyn_cast<StoreInst>(inst)) {
-          Value* v = storeInst->getPointerOperand();
-          it = map->find(v);
-          if (it != map->end()) {
-            before[it->second] = false;
-          }
+        // Identity transfer function (on no instructions)
+        if (inst == NULL) {
+          // empty gen/kill sets
         }
-        // Union with vars_used set
+        // kill set (writing to a variable)
+        else if (StoreInst* storeInst = dyn_cast<StoreInst>(inst)) {
+          it = map->find(storeInst->getPointerOperand());
+          kill[it->second] = (it != map->end());
+        }
+        // gen set (loading from variable)
         else if (LoadInst* loadInst = dyn_cast<LoadInst>(inst)) {
           it = map->find(loadInst->getPointerOperand());
-          if (it != map->end()) {
-            before[it->second] = true;
-          }
+          gen[it->second] = (it != map->end());
         }
 
-        // (before - kill) U vars_used
-        return before;
+        return GKPair::pair(gen, kill);
       }
 
       // Override
