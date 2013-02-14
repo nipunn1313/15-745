@@ -1,5 +1,5 @@
 // 15-745 S13 Assignment 2: reaching-definitions.cpp
-// Group: bovik, bovik2
+// Group: nkoorapa, pdixit 
 // Description : This file implements reaching definition analysis by exploiting
 //               generic framework in dataflow.h This also serves as an example
 //               of how to use the generic framework. 
@@ -23,8 +23,10 @@
 //                  & kill sets of consecutive instructions (or instr & block)
 //              
 //               5. Meet operator function is overriden to give union
-// 
-
+//              
+//               6. getTFParams is overriden to return gen and kill sets for 
+//                  each instruction based on how they are defined for reaching-
+//                  definitions
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "llvm/Function.h"
@@ -42,10 +44,14 @@ class ReachingDefinitions : public FunctionPass {
  public:
   static char ID;
 
+  // Map from memory location (pointer operand) to instruction pointer 
   typedef std::map<Value*, std::vector<Instruction*> > defmap_t;
+
+  // Map from a definition to it's index in vector of all definitions
   typedef std::map<Value*, int> idxmap_t;
   typedef std::pair<BitVector, BitVector> GKPair;
 
+  // Inherit the DataFlow class 
   class RD_DF : public DataFlow<GKPair> {
 
     private:
@@ -65,7 +71,7 @@ class ReachingDefinitions : public FunctionPass {
         return input.reset(params.second) |= params.first;
       }
 
-      // Override
+      // Override composition
       GKPair compose(GKPair a, GKPair b) {
         // gen = (a.gen - b.kill) U b.gen
         BitVector gen = a.first;
@@ -106,12 +112,13 @@ class ReachingDefinitions : public FunctionPass {
   ReachingDefinitions() : FunctionPass(ID) { }
 
   virtual bool runOnFunction(Function& F) {
-    //ExampleFunctionPrinter(errs(), F);
 
+    // Create variable list and their mappings to instructions
     std::vector<Value*> varList;
     idxmap_t idxMap;
     defmap_t defMap;
 
+    // For each store instruction, 
     for (inst_iterator iter = inst_begin(F), end = inst_end(F);
          iter != end; ++iter) {
       Instruction* inst = &(*iter);
@@ -154,8 +161,6 @@ class ReachingDefinitions : public FunctionPass {
     // Did not modify the incoming Function.
     return false;
 
-    // Did not modify the incoming Function.
-    return false;
   }
 
   virtual void getAnalysisUsage(AnalysisUsage& AU) const {

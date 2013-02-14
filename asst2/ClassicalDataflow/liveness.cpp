@@ -23,6 +23,9 @@
 //                  & kill sets of consecutive instructions (or instr & block)
 //              
 //               5. Meet operator function is overriden to give union
+//
+//               6. getTFParams is overriden to return gen and kill sets for 
+//                  each instruction based on how they are defined for liveness
 // 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -43,6 +46,7 @@ class Liveness : public FunctionPass {
  public:
   static char ID;
 
+  // Map from a variable to it's index in vector of variables
   typedef std::map<Value*, int> idxmap_t;
   typedef std::pair<BitVector, BitVector> GKPair;
 
@@ -116,7 +120,6 @@ class Liveness : public FunctionPass {
   Liveness() : FunctionPass(ID) { }
 
   virtual bool runOnFunction(Function& F) {
-    //ExampleFunctionPrinter(errs(), F);
 
     // Make one pass through to find all variables.
     std::vector<Value*> varList;
