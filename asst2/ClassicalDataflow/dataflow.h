@@ -179,7 +179,6 @@ DataFlow<Param_t>::doAnalysis(Function& f) {
     bbStartEnd[bb] = BVPair(top, top);
 
     // Find all the exit blocks to this function
-    //TODO make sure this check actually gets exit blocks
     if (bb->getTerminator()->getNumSuccessors() == 0) {
       exitBlocks.push_back(bb);
     }
