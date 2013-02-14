@@ -1,5 +1,30 @@
 // 15-745 S13 Assignment 2: reaching-definitions.cpp
 // Group: bovik, bovik2
+// Description : This file implements reaching definition analysis by exploiting
+//               generic framework in dataflow.h This also serves as an example
+//               of how to use the generic framework. 
+//
+//               Following things should be noticed when refering to it as an 
+//               example when writing another pass : 
+// 
+//               1. Tranfer-function parameter type is defined as GKPair which 
+//                  is pair of gen and kill sets that can be associated to each
+//                  instruction or basic block. This should be defined.
+//
+//               2. "RD_DF" is the main dataflow class which extends DataFlow 
+//                  with GKPair template parameter. It uses constructor arguments 
+//                  to indicate that RD is a FORWARD analysis with emptySet as 
+//                  the TOP and boundary values.
+//          
+//               3. Virtual function "transferFunctionParams" is implemented to 
+//                  calculate output = ( input - kill ) U gen
+//
+//               4. Virtual function "compose" is implemented to calculate gen
+//                  & kill sets of consecutive instructions (or instr & block)
+//              
+//               5. Meet operator function is overriden to give union
+// 
+
 ////////////////////////////////////////////////////////////////////////////////
 
 #include "llvm/Function.h"
@@ -36,8 +61,8 @@ class ReachingDefinitions : public FunctionPass {
 
       // Override. (in - kill) U gen
       BitVector transferFunctionParams(GKPair params,
-                                               BitVector before) {
-        return before.reset(params.second) |= params.first;
+                                               BitVector input) {
+        return input.reset(params.second) |= params.first;
       }
 
       // Override
@@ -51,7 +76,7 @@ class ReachingDefinitions : public FunctionPass {
         return GKPair::pair(gen, kill);
       }
 
-      // Override
+      // Override to return Gen and Kill sets for each instruction
       GKPair getTFParams(Instruction* inst) {
         BitVector gen = emptySet(idxMap.size());
         BitVector kill = emptySet(idxMap.size());
@@ -72,7 +97,7 @@ class ReachingDefinitions : public FunctionPass {
         return GKPair::pair(gen, kill);
       }
 
-      // Override
+      // Override to implement union
       BitVector meet(BitVector left, const BitVector& right) {
         return left |= right;
       }

@@ -1,5 +1,29 @@
 // 15-745 S13 Assignment 2: liveness.cpp
 // Group: nkoorapa, pdixit
+// Description : This file implements liveness analysis by exploiting the 
+//               generic framework in dataflow.h This also serves as an example
+//               of how to use the generic framework. 
+//
+//               Following things should be noticed when refering to it as an 
+//               example when writing another pass : 
+// 
+//               1. Tranfer-function parameter type is defined as GKPair which 
+//                  is pair of gen and kill sets that can be associated to each
+//                  instruction or basic block
+//
+//               2. LivenessDF is the main dataflow class which extends DataFlow 
+//                  with GKPair and uses constructor parameters to indicate that
+//                  Liveness is a BACKWARDS analysis with emptySet as the TOP 
+//                  and boundary values.
+//          
+//               3. Virtual function transferFunctionParams is implemented to 
+//                  calculate output = ( input - kill ) U gen
+//
+//               4. Virtual function compose is implemented to calculate gen
+//                  & kill sets of consecutive instructions (or instr & block)
+//              
+//               5. Meet operator function is overriden to give union
+// 
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "llvm/Function.h"
@@ -45,8 +69,8 @@ class Liveness : public FunctionPass {
       ~LivenessDF() {}
 
       // Override. (in - kill) U gen
-      BitVector transferFunctionParams(GKPair params, BitVector before) {
-        return before.reset(params.second) |= params.first;
+      BitVector transferFunctionParams(GKPair params, BitVector input) {
+        return input.reset(params.second) |= params.first;
       }
 
       // Override
