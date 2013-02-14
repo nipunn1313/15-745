@@ -10,4 +10,7 @@ dataflow.o: dataflow.cpp dataflow.h
 clean:
 	rm -f *.o *~ *.so
 
+run:
+	opt -load ./reaching-definitions.so -cd-reaching-definitions loop.o -o out
+
 .PHONY: clean all
