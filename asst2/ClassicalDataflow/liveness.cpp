@@ -1,5 +1,32 @@
 // 15-745 S13 Assignment 2: liveness.cpp
 // Group: nkoorapa, pdixit
+// Description : This file implements liveness analysis by exploiting the 
+//               generic framework in dataflow.h This also serves as an example
+//               of how to use the generic framework. 
+//
+//               Following things should be noticed when refering to it as an 
+//               example when writing another pass : 
+// 
+//               1. Tranfer-function parameter type is defined as GKPair which 
+//                  is pair of gen and kill sets that can be associated to each
+//                  instruction or basic block
+//
+//               2. LivenessDF is the main dataflow class which extends DataFlow 
+//                  with GKPair and uses constructor parameters to indicate that
+//                  Liveness is a BACKWARDS analysis with emptySet as the TOP 
+//                  and boundary values.
+//          
+//               3. Virtual function transferFunctionParams is implemented to 
+//                  calculate output = ( input - kill ) U gen
+//
+//               4. Virtual function compose is implemented to calculate gen
+//                  & kill sets of consecutive instructions (or instr & block)
+//              
+//               5. Meet operator function is overriden to give union
+//
+//               6. getTFParams is overriden to return gen and kill sets for 
+//                  each instruction based on how they are defined for liveness
+// 
 ///////////////////////////////////////////////////////////////////////////////
 
 #include "llvm/Function.h"
@@ -19,15 +46,19 @@ class Liveness : public FunctionPass {
  public:
   static char ID;
 
+  // Map from a variable to it's index in vector of variables
   typedef std::map<Value*, int> idxmap_t;
+  typedef std::pair<BitVector, BitVector> GKPair;
 
-  class LivenessDF : public DataFlow {
+  /* Composeable parameters where parameters are a Gen/Kill pair */
+  class LivenessDF : public DataFlow<GKPair> {
     private:
       idxmap_t* map;
 
     public:
       LivenessDF(idxmap_t* map) :
-        DataFlow(emptySet(map->size()), emptySet(map->size()), BACKWARDS) {
+        DataFlow<GKPair>(emptySet(map->size()),
+                         emptySet(map->size()), BACKWARDS) {
           this->map = map;
 
 #if 0
@@ -41,31 +72,47 @@ class Liveness : public FunctionPass {
       }
       ~LivenessDF() {}
 
-      virtual BitVector transferFunction(Instruction* inst, BitVector before) {
-
-        idxmap_t::iterator it;
-
-        // Eliminate kill set (writing to a variable)
-        if (StoreInst* storeInst = dyn_cast<StoreInst>(inst)) {
-          Value* v = storeInst->getPointerOperand();
-          it = map->find(v);
-          if (it != map->end()) {
-            before[it->second] = false;
-          }
-        }
-        // Union with vars_used set
-        else if (LoadInst* loadInst = dyn_cast<LoadInst>(inst)) {
-          it = map->find(loadInst->getPointerOperand());
-          if (it != map->end()) {
-            before[it->second] = true;
-          }
-        }
-
-        // (before - kill) U vars_used
-        return before;
+      // Override. (in - kill) U gen
+      BitVector transferFunctionParams(GKPair params, BitVector input) {
+        return input.reset(params.second) |= params.first;
       }
 
-      virtual BitVector meet(BitVector left, const BitVector& right) {
+      // Override
+      GKPair compose(GKPair a, GKPair b) {
+        // gen = (a.gen - b.kill) U b.gen
+        BitVector gen = a.first;
+        gen.reset(b.second) |= b.first;
+        // kill = a.kill U b.kill
+        BitVector kill = a.second;
+        kill |= b.second;
+        return GKPair::pair(gen, kill);
+      }
+
+      GKPair getTFParams(Instruction* inst) {
+        idxmap_t::iterator it;
+        BitVector gen = emptySet(map->size());
+        BitVector kill = emptySet(map->size());
+
+        // Identity transfer function (on no instructions)
+        if (inst == NULL) {
+          // empty gen/kill sets
+        }
+        // kill set (writing to a variable)
+        else if (StoreInst* storeInst = dyn_cast<StoreInst>(inst)) {
+          it = map->find(storeInst->getPointerOperand());
+          kill[it->second] = (it != map->end());
+        }
+        // gen set (loading from variable)
+        else if (LoadInst* loadInst = dyn_cast<LoadInst>(inst)) {
+          it = map->find(loadInst->getPointerOperand());
+          gen[it->second] = (it != map->end());
+        }
+
+        return GKPair::pair(gen, kill);
+      }
+
+      // Override
+      BitVector meet(BitVector left, const BitVector& right) {
         return left |= right;
       }
   };
@@ -73,7 +120,6 @@ class Liveness : public FunctionPass {
   Liveness() : FunctionPass(ID) { }
 
   virtual bool runOnFunction(Function& F) {
-    //ExampleFunctionPrinter(errs(), F);
 
     // Make one pass through to find all variables.
     std::vector<Value*> varList;
