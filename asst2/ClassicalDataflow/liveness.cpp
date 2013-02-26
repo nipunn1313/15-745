@@ -100,12 +100,16 @@ class Liveness : public FunctionPass {
         // kill set (writing to a variable)
         else if (StoreInst* storeInst = dyn_cast<StoreInst>(inst)) {
           it = map->find(storeInst->getPointerOperand());
-          kill[it->second] = (it != map->end());
+          if (it != map->end()) {
+            kill[it->second] = true;
+          }
         }
         // gen set (loading from variable)
         else if (LoadInst* loadInst = dyn_cast<LoadInst>(inst)) {
           it = map->find(loadInst->getPointerOperand());
-          gen[it->second] = (it != map->end());
+          if (it != map->end()) {
+            gen[it->second] = true;
+          }
         }
 
         return GKPair::pair(gen, kill);
