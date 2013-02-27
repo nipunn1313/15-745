@@ -210,7 +210,7 @@ class Liveness : public FunctionPass {
   }
 
   virtual void getAnalysisUsage(AnalysisUsage& AU) const {
-    AU.setPreservesCFG();
+    AU.setPreservesAll();
   }
 
  private:
