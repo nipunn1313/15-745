@@ -1,4 +1,4 @@
-all: liveness.so reaching-definitions.so
+all: dead-code-elimination.so
 
 CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0 -Wall -Werror
 
@@ -11,6 +11,6 @@ clean:
 	rm -f *.o *~ *.so
 
 run:
-	opt -load ./reaching-definitions.so -cd-reaching-definitions loop.o -o out
+	opt -load ./dead-code-elimination.so -cd-dce loop.o -o out
 
 .PHONY: clean all
