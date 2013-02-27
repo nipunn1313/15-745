@@ -1,6 +1,6 @@
 // 15-745 S13 Assignment 2: dataflow.h
 // Group: nkoorapa, pdixit
-////////////////////////////////////////////////////////////////////////////////
+///////////////////////////////////////////////////////////////////////////////
 
 #ifndef __CLASSICAL_DATAFLOW_DATAFLOW_H__
 #define __CLASSICAL_DATAFLOW_DATAFLOW_H__
@@ -19,12 +19,12 @@
 
 namespace llvm {
 
-// Generic dataflow framework template. The template variable is Param_t 
-// which is the type defined by a user of the framework. Param_t is the 
-// type for property of an instruction. For example, both liveness and 
+// Generic dataflow framework template. The template variable is Param_t
+// which is the type defined by a user of the framework. Param_t is the
+// type for property of an instruction. For example, both liveness and
 // reaching definition use a pair of Gen and Kill sets (vectors) as Param_t
 // A variable of type Param_t is associated with each instruction and
-// does not change throughout the analysis, so it can be cached. 
+// does not change throughout the analysis, so it can be cached.
 // Generic transfer function takes input bit-vector and Param_t as input
 // More description is in the write-up.
 template<class Param_t>
@@ -65,7 +65,7 @@ class DataFlow {
   void postOrder(BasicBlock* bb, std::deque<BasicBlock*> &q,
                  std::map<BasicBlock*, bool> &visited);
 
-  // Generic transfer function for block, takes basic block, 
+  // Generic transfer function for block, takes basic block,
   // Input bitvector and a reference to instruction parameters
   // cache. Returns the output bitvector
   BitVector instTransferFunc(BasicBlock* bb, BitVector input,
@@ -91,7 +91,7 @@ class DataFlow {
   virtual Param_t getTFParams(Instruction* inst) = 0;
   virtual Param_t compose(Param_t a, Param_t b) = 0;
   virtual BitVector meet(BitVector left, const BitVector& right) = 0;
-  
+
   // The top level function. Call this to run the dataflow engine:
   std::map<Instruction*, BitVector> doAnalysis(Function& f);
 };
@@ -138,7 +138,7 @@ DataFlow<Param_t>::transferFunctionBB(BasicBlock* bb, BitVector input) {
     return transferFunctionParams(it->second, input);
   }
 
-  // If cached value is not available, compose the TFParams of 
+  // If cached value is not available, compose the TFParams of
   // instructions together to get TFParams for the basic block
   // For example, gen and kill sets of instructions can be composed
   // to form gen and kill set for a basic-block. It is users responsibility
@@ -165,7 +165,7 @@ DataFlow<Param_t>::transferFunctionBB(BasicBlock* bb, BitVector input) {
 }
 
 // doAnalysis on the function class passed as input and return
-// map from instruction to the output for each instruction. 
+// map from instruction to the output for each instruction.
 template<class Param_t> std::map<Instruction*, BitVector>
 DataFlow<Param_t>::doAnalysis(Function& f) {
   std::map<BasicBlock*, BVPair> bbStartEnd;
@@ -184,7 +184,7 @@ DataFlow<Param_t>::doAnalysis(Function& f) {
     }
   }
 
-  // Initialize the boundary for entry or exit blocks depending on 
+  // Initialize the boundary for entry or exit blocks depending on
   // direction of analysis.
   if (direction == FORWARDS) {
     bbStartEnd[entryBlock].first = boundary;
@@ -230,7 +230,7 @@ DataFlow<Param_t>::doAnalysis(Function& f) {
           iter != end; ++iter) {
         input = meet(input, bbStartEnd[*iter].second);
       }
-      
+
       // Compute the output using transfer function for this basic block
       output = transferFunctionBB(bb, input);
 
@@ -249,14 +249,14 @@ DataFlow<Param_t>::doAnalysis(Function& f) {
           }
         }
       }
-    } else { // Backward analysis 
-      
+    } else { // Backward analysis
+
       // Obtain input by meet of outputs for all sucessors
       for (succ_iterator iter = succ_begin(bb), end = succ_end(bb);
           iter != end; ++iter) {
         input = meet(input, bbStartEnd[*iter].first);
       }
-    
+
       // Apply transfer function to get output bit vector
       output = transferFunctionBB(bb, input);
 
@@ -313,7 +313,7 @@ DataFlow<Param_t>::doAnalysis(Function& f) {
 
 // Read the basic blocks and return a queue in postOrder that can be
 // reversed for Forward problems and used as it is for backward problems
-// to minimize the iteration on basic-blocks while computing transfer 
+// to minimize the iteration on basic-blocks while computing transfer
 // function
 template<class Param_t> void
 DataFlow<Param_t>::postOrder(BasicBlock* bb, std::deque<BasicBlock*> &q,

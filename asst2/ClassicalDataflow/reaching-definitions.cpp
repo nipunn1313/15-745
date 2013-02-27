@@ -1,30 +1,30 @@
 // 15-745 S13 Assignment 2: reaching-definitions.cpp
-// Group: nkoorapa, pdixit 
+// Group: nkoorapa, pdixit
 // Description : This file implements reaching definition analysis by exploiting
 //               generic framework in dataflow.h This also serves as an example
-//               of how to use the generic framework. 
+//               of how to use the generic framework.
 //
-//               Following things should be noticed when refering to it as an 
-//               example when writing another pass : 
-// 
-//               1. Tranfer-function parameter type is defined as GKPair which 
+//               Following things should be noticed when refering to it as an
+//               example when writing another pass :
+//
+//               1. Tranfer-function parameter type is defined as GKPair which
 //                  is pair of gen and kill sets that can be associated to each
 //                  instruction or basic block. This should be defined.
 //
-//               2. "RD_DF" is the main dataflow class which extends DataFlow 
-//                  with GKPair template parameter. It uses constructor arguments 
-//                  to indicate that RD is a FORWARD analysis with emptySet as 
+//               2. "RD_DF" is the main dataflow class which extends DataFlow
+//                  with GKPair template parameter. It uses constructor arguments
+//                  to indicate that RD is a FORWARD analysis with emptySet as
 //                  the TOP and boundary values.
-//          
-//               3. Virtual function "transferFunctionParams" is implemented to 
+//
+//               3. Virtual function "transferFunctionParams" is implemented to
 //                  calculate output = ( input - kill ) U gen
 //
 //               4. Virtual function "compose" is implemented to calculate gen
 //                  & kill sets of consecutive instructions (or instr & block)
-//              
+//
 //               5. Meet operator function is overriden to give union
-//              
-//               6. getTFParams is overriden to return gen and kill sets for 
+//
+//               6. getTFParams is overriden to return gen and kill sets for
 //                  each instruction based on how they are defined for reaching-
 //                  definitions
 ////////////////////////////////////////////////////////////////////////////////
@@ -44,14 +44,14 @@ class ReachingDefinitions : public FunctionPass {
  public:
   static char ID;
 
-  // Map from memory location (pointer operand) to instruction pointer 
+  // Map from memory location (pointer operand) to instruction pointer
   typedef std::map<Value*, std::vector<Instruction*> > defmap_t;
 
   // Map from a definition to it's index in vector of all definitions
   typedef std::map<Value*, int> idxmap_t;
   typedef std::pair<BitVector, BitVector> GKPair;
 
-  // Inherit the DataFlow class 
+  // Inherit the DataFlow class
   class RD_DF : public DataFlow<GKPair> {
 
     private:
@@ -118,7 +118,7 @@ class ReachingDefinitions : public FunctionPass {
     idxmap_t idxMap;
     defmap_t defMap;
 
-    // For each store instruction, 
+    // For each store instruction,
     for (inst_iterator iter = inst_begin(F), end = inst_end(F);
          iter != end; ++iter) {
       Instruction* inst = &(*iter);
