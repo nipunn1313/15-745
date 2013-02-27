@@ -51,16 +51,21 @@ class Liveness : public FunctionPass {
   // Map from a variable to it's index in vector of variables
   typedef std::map<Value*, int> idxmap_t;
   //typedef std::pair<BitVector, BitVector> GKPair;
-  typedef BitVector GenSet;
+  
+  typedef struct {
+    bool definitely_live;
+    int index;
+    BitVector uses;
+  } deadcode_params_t;
 
   /* Composeable parameters where parameters are a Gen/Kill pair */
-  class LivenessDF : public DataFlow<GenSet> {
+  class LivenessDF : public DataFlow<deadcode_params_t> {
     private:
       idxmap_t* map;
 
     public:
       LivenessDF(idxmap_t* map) :
-        DataFlow<GenSet>(emptySet(map->size()),
+        DataFlow<deadcode_params_t>(emptySet(map->size()),
                          emptySet(map->size()), BACKWARDS) {
           this->map = map;
 
@@ -76,18 +81,25 @@ class Liveness : public FunctionPass {
       ~LivenessDF() {}
 
       // Override. (in - kill) U gen
-      BitVector transferFunctionParams(GenSet params, BitVector input) {
-        return input |= params;
+      // TODO : Make it take reference to params
+
+Implement the new scheme in which we keep track of index of current instruction mapped to bit vector of it's sources
+
+      BitVector transferFunctionParams(deadcode_params_t params, BitVector input) {
+        if (params.definitely_live || (input.anyCommon(params.uses))) {
+            input[index] = true;
+        }
+        return input;
       }
 
       // Override
-      GenSet compose(GenSet a, GenSet b) {
+      deadcode_params_t compose(deadcode_params_t a, deadcode_params_t b) {
         return (a |= b);
       }
 
-      GenSet getTFParams(Instruction* inst) {
+      deadcode_params_t getTFParams(Instruction* inst) {
         idxmap_t::iterator it;
-        GenSet gen = emptySet(map->size());
+        deadcode_params_t gen = emptySet(map->size());
 
         // Identity transfer function (on no instructions)
         if (inst == NULL) {
@@ -120,14 +132,19 @@ class Liveness : public FunctionPass {
   virtual bool runOnFunction(Function& F) {
 
     // Make one pass through to find all variables.
-    //std::vector<Value*> varList;
+    std::vector<Value*> varList;
     idxmap_t varMap;
+
+    int idx = 0;
 
     // Walk through all instructions to get variable candidates
     for (inst_iterator iter = inst_begin(F), end = inst_end(F);
          iter != end; ++iter) {
       Instruction* inst = &(*iter);
-      varMap[inst] = 0;
+      varMap[inst] = idx;
+      idx++;
+
+      varList.push_back(inst);
     }
 
 
@@ -136,13 +153,17 @@ class Liveness : public FunctionPass {
     std::map<Instruction*, BitVector> result = ldf.doAnalysis(F);
 
     // Print out the dead instructions :
-    for (idxmap_t::iterator iter = varMap.begin(),
-         end = varMap.end(); iter != end; ++iter) {
-      if (varMap[iter->first] == 0) {
-        Value* v = iter->first;
-        v->print(errs());
-        fprintf (stderr, "\n");
-      }
+    Instruction* first_inst = &(F.getEntryBlock().front());
+
+    // At the end of analysis, bit vector before the first instr
+    // contains live instruction - because of SSA representation.
+    BitVector live_insts = result[first_inst];
+
+    for (unsigned i = 0; i < live_insts.size(); ++i) {
+        if (live_insts[i] == false) {
+          varList[i]->print(errs());  
+          errs()<< "\n";
+        }
     }
 
     // the incoming Function is modified.
