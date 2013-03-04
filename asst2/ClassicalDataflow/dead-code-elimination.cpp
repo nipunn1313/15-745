@@ -1,7 +1,6 @@
 // 15-745 S13 Assignment 2: liveness.cpp
 // Group: nkoorapa, pdixit
-// TODO : Update this at end
-// Description : This file implements liveness analysis by exploiting the 
+// Description : This file implements liveness analysis by exploiting the   // TODO : Update this at end .. Also change 'Liveness' to something else
 //               generic framework in dataflow.h This also serves as an example
 //               of how to use the generic framework. 
 //
@@ -52,22 +51,29 @@ class Liveness : public FunctionPass {
   typedef std::map<Value*, int> idxmap_t;
   //typedef std::pair<BitVector, BitVector> GKPair;
   
+  // For one instruction, it's Transfer-Function parameter are 
+  // it's index in the bit vector, and users
+  // These can be computed and cached and used again and again
   typedef struct {
     bool definitely_live;
-    int index;
+    int index;  
     BitVector uses;
-  } deadcode_params_t;
+  } deadcode_params_inst_t;
+
+  // Generic Transfer-Function parameter for basic-blocks 
+  // (one element per instr)
+  typedef std::vector<deadcode_params_inst_t> deadcode_params_t;
 
   /* Composeable parameters where parameters are a Gen/Kill pair */
   class LivenessDF : public DataFlow<deadcode_params_t> {
     private:
-      idxmap_t* map;
+      idxmap_t* index_map;
 
     public:
-      LivenessDF(idxmap_t* map) :
-        DataFlow<deadcode_params_t>(emptySet(map->size()),
-                         emptySet(map->size()), BACKWARDS) {
-          this->map = map;
+      LivenessDF(idxmap_t* index_map) :
+        DataFlow<deadcode_params_t>(emptySet(index_map->size()),
+                         emptySet(index_map->size()), BACKWARDS) {
+          this->index_map = index_map;
 
 #if 0
           for (idxmap_t::iterator it = map->begin(), end =
@@ -82,43 +88,96 @@ class Liveness : public FunctionPass {
 
       // Override. (in - kill) U gen
       // TODO : Make it take reference to params
-
-Implement the new scheme in which we keep track of index of current instruction mapped to bit vector of it's sources
-
       BitVector transferFunctionParams(deadcode_params_t params, BitVector input) {
-        if (params.definitely_live || (input.anyCommon(params.uses))) {
-            input[index] = true;
+        // Set input bits for all the uses which are already set:
+        for (deadcode_params_t::iterator iter = params.begin(), 
+          end = params.end(); iter != end; ++iter) {
+          
+          deadcode_params_inst_t* temp = &(*iter);
+          
+          // If input is set for an index or it is definitely live,
+          // set the use bits in input
+          if (temp->definitely_live || input[temp->index]) {
+            input[temp->index] = true; // Ensures for definitely_live case
+            input |= temp->uses;
+          }
         }
         return input;
       }
 
       // Override
       deadcode_params_t compose(deadcode_params_t a, deadcode_params_t b) {
-        return (a |= b);
+        // Concatenate the two vectors in reverse order :
+        // TODO : Review/test this part to ensure things are as expected.
+        // Within a block when iterating, we want to work in reverse order
+        b.insert(b.end(), a.begin(), a.end());
+        return b;
       }
 
+      // Return parameters for an instruction:
       deadcode_params_t getTFParams(Instruction* inst) {
         idxmap_t::iterator it;
-        deadcode_params_t gen = emptySet(map->size());
+        deadcode_params_inst_t result;
+
+        // Value to return is a vector
+        deadcode_params_t ret_result;
+        
+        // Initial values :
+        result.definitely_live = false;
+        result.index = 0;
+        result.uses = emptySet(index_map->size());
 
         // Identity transfer function (on no instructions)
         if (inst == NULL) {
-          // empty gen sets
+          // Empty
         }
-        // gen set (writing to a variable)
         else {
+            // Definitely live case:
             if (isa<TerminatorInst>(inst) ||
                 isa<DbgInfoIntrinsic>(inst) ||
                 isa<LandingPadInst>(inst) ||
                 inst->mayHaveSideEffects()) {
 
-                it = map->find(inst);
-                if (it != map->end()) {
-                    gen[it->second] = true;
+                it = index_map->find(inst);
+                if (it != index_map->end()) {
+                    result.definitely_live = true;
+                    result.index = it->second;
+                    //*//fprintf (stderr, "Definitely live : ");
+                    //*//inst->print(errs());
+                    //*//fprintf (stderr, "\n");
                 }
             }
+
+            // Print the instruction :
+            //*//fprintf (stderr, "Instruction : ");
+            //*//inst->print(errs());
+            //*//fprintf (stderr, "\n");
+
+            // Get the uses :
+            for (User::value_op_iterator iter = inst->value_op_begin(), 
+              end = inst->value_op_end(); iter != end; ++iter) {
+              
+              Value* use_inst =  *iter;
+              it = index_map->find(use_inst);
+            
+              //*//fprintf (stderr, "uses : ");
+              if (it != index_map->end()) {
+                
+                // Print the use instruction
+                //*//use_inst->print(errs());
+
+                result.uses[it->second] = true;
+              }
+              //*//fprintf (stderr, "\n");
+            }
+
+
+
         }
-        return gen;
+
+        // Push on vector and return it:
+        ret_result.push_back(result);
+        return (ret_result);
       }
 
       // Override
