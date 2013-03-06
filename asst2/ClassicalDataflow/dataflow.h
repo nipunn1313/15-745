@@ -14,6 +14,8 @@
 #include "llvm/ADT/ValueMap.h"
 #include "llvm/Support/CFG.h"
 
+#include "llvm/Support/raw_ostream.h"
+
 #include <deque>
 #include <map>
 
@@ -256,6 +258,10 @@ DataFlow<Param_t>::doAnalysis(Function& f) {
           iter != end; ++iter) {
         input = meet(input, bbStartEnd[*iter].first);
       }
+
+      fprintf (stderr, "\nItarating on basic block : \n");
+      bb->print(errs());
+      fprintf (stderr, "basic-block end\n\n");
 
       // Apply transfer function to get output bit vector
       output = transferFunctionBB(bb, input);
