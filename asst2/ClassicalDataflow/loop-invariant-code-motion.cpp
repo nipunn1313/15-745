@@ -1,10 +1,12 @@
 #include "llvm/Pass.h"
 #include "llvm/Analysis/LoopInfo.h"
 #include "llvm/Analysis/LoopPass.h"
+#include "llvm/Analysis/ValueTracking.h"
 
 #include "dataflow.h"
 
 #include <iostream>
+#include <queue>
 
 using namespace llvm;
 
@@ -55,12 +57,7 @@ class LICM : public LoopPass {
 
   LICM() : LoopPass(ID) {}
 
-  virtual bool runOnLoop(Loop* L, LPPassManager &LPM) {
-    // Ignore loops without preheaders
-    if (L->getLoopPreheader() == NULL) {
-      return false;
-    }
-
+  void printDominatorInfo(Loop* L) {
     Function* F = L->getHeader()->getParent();
 
     block_idxmap_t idxMap;
@@ -103,6 +100,87 @@ class LICM : public LoopPass {
 
       std::cerr << bb->getName().str() << " idom " <<
                    idom->getName().str() << "\n";
+    }
+  }
+
+  bool isLoopInvariant(Instruction* inst,
+                       std::map<Instruction*, bool> inLoop) {
+    //inst->print(errs()); fprintf(stderr, "\n");
+    if (!isSafeToSpeculativelyExecute(inst) ||
+        inst->mayReadFromMemory() ||
+        isa<LandingPadInst>(inst)) {
+      return false;
+    }
+
+    for (Instruction::op_iterator iter = inst->op_begin(),
+         end = inst->op_end(); iter != end; ++iter) {
+      Use* use = iter;
+      Instruction* useInst = (Instruction*) use->get();
+#if 0
+      fprintf(stderr, "  Use = ");
+      useInst->print(errs());
+      fprintf(stderr, "\n");
+#endif
+      if (inLoop[useInst]) {
+        //fprintf(stderr, "op is in loop!\n");
+        return false;
+      }
+    }
+    return true;
+  }
+
+  virtual bool runOnLoop(Loop* L, LPPassManager &LPM) {
+    // Ignore loops without preheaders
+    if (L->getLoopPreheader() == NULL) {
+      return false;
+    }
+
+    printDominatorInfo(L);
+
+    // Now do LICM
+
+    // Pick instructions to hoist
+    std::map<Instruction*, bool> inLoop;
+    std::map<Instruction*, bool> toHoist;
+    std::queue<Instruction*> worklist;
+
+    // Initialize worklist to all instructions
+    // Initialize inLoop to all instructions
+    for (Loop::block_iterator i1 = L->block_begin(),
+         e1 = L->block_end(); i1 != e1; ++i1) {
+      BasicBlock* bb = *i1;
+      for (BasicBlock::iterator i2 = bb->begin(),
+           e2 = bb->end(); i2 != e2; ++i2) {
+        Instruction* i = i2;
+        worklist.push(i);
+        inLoop[i] = true;
+      }
+    }
+
+    // Go through worklist hoisting when appropriate. When hoisting, put uses
+    // back in the worklist as they may become hoistable
+    while (!worklist.empty()) {
+      Instruction* inst = worklist.front();
+      worklist.pop();
+      if (inLoop[inst] && isLoopInvariant(inst, inLoop)) {
+        toHoist[inst] = true;
+        inLoop[inst] = false;
+        // Go back to look at this instruction's uses
+        for (Instruction::use_iterator ui = inst->use_begin(),
+             ue = inst->use_end(); ui != ue; ++ui) {
+          Instruction* use = (Instruction*) *ui;
+          worklist.push(use);
+        }
+      }
+    }
+
+    std::cerr << "To hoist:\n";
+    for (std::map<Instruction*, bool>::iterator it = toHoist.begin(),
+         end = toHoist.end(); it != end; ++it) {
+      if (it->second) {
+        it->first->print(errs());
+        std::cerr << "\n";
+      }
     }
 
     // TODO For now. Need to be true if we modify

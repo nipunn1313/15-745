@@ -14,6 +14,6 @@ run:
 	opt -load ./dead-code-elimination.so -cd-dce loop.o -o out
 
 licm:
-	opt -load ./loop-invariant-code-motion.so -loop-simplify -cd-licm tests/loop1.o -o out
+	opt -load ./loop-invariant-code-motion.so -mem2reg -loop-simplify -cd-licm tests/loop1.o -o out
 
 .PHONY: clean all
