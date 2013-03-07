@@ -1,4 +1,4 @@
-all: dead-code-elimination.so
+all: dead-code-elimination.so loop-invariant-code-motion.so
 
 CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0 -Wall -Werror
 
@@ -12,5 +12,8 @@ clean:
 
 run:
 	opt -load ./dead-code-elimination.so -cd-dce loop.o -o out
+
+licm:
+	opt -load ./loop-invariant-code-motion.so -loop-simplify -cd-licm tests/loop1.o -o out
 
 .PHONY: clean all
