@@ -3,6 +3,11 @@
 
 SHELL=bash
 
+all: test1.o test2.o test3.o loop1.o
+
+%.o : %.c
+	clang -O0 -emit-llvm -c $^ -o $@
+
 tests:
 	
 	clang -O0 -emit-llvm -c test1.c
