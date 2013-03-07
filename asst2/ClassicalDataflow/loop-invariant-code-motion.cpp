@@ -130,8 +130,9 @@ class LICM : public LoopPass {
   }
 
   virtual bool runOnLoop(Loop* L, LPPassManager &LPM) {
+    BasicBlock* preHeader = L->getLoopPreheader();
     // Ignore loops without preheaders
-    if (L->getLoopPreheader() == NULL) {
+    if (preHeader == NULL) {
       return false;
     }
 
@@ -141,7 +142,7 @@ class LICM : public LoopPass {
 
     // Pick instructions to hoist
     std::map<Instruction*, bool> inLoop;
-    std::map<Instruction*, bool> toHoist;
+    std::vector<Instruction*> toHoist;
     std::queue<Instruction*> worklist;
 
     // Initialize worklist to all instructions
@@ -163,7 +164,7 @@ class LICM : public LoopPass {
       Instruction* inst = worklist.front();
       worklist.pop();
       if (inLoop[inst] && isLoopInvariant(inst, inLoop)) {
-        toHoist[inst] = true;
+        toHoist.push_back(inst);
         inLoop[inst] = false;
         // Go back to look at this instruction's uses
         for (Instruction::use_iterator ui = inst->use_begin(),
@@ -175,16 +176,16 @@ class LICM : public LoopPass {
     }
 
     std::cerr << "To hoist:\n";
-    for (std::map<Instruction*, bool>::iterator it = toHoist.begin(),
+    for (std::vector<Instruction*>::iterator it = toHoist.begin(),
          end = toHoist.end(); it != end; ++it) {
-      if (it->second) {
-        it->first->print(errs());
-        std::cerr << "\n";
-      }
+      Instruction* inst = *it;
+      inst->removeFromParent();
+      inst->insertBefore(preHeader->getTerminator());
+      inst->print(errs());
+      std::cerr << "\n";
     }
 
-    // TODO For now. Need to be true if we modify
-    return false;
+    return !toHoist.empty();
   }
 
   virtual void getAnalysisUsage(AnalysisUsage& AU) const {
