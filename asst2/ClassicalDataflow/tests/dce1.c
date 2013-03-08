@@ -4,14 +4,12 @@ int main() {
     j = 2;
     k = 13;
     i++;
+
+    k--;
     
-    if (i != 0) 
-        j++;
+    j = i + 12;
 
     k = 0 + j;
 
     return j;
-    
-    return k;
-    return i;
 }
