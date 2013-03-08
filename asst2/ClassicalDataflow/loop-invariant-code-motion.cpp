@@ -40,11 +40,11 @@ class LICM : public LoopPass {
         return (*map)[inst->getParent()];
       }
 
-      // This is stupid. We didn't set up a good way to skip instruction
-      // level summaries
+      // No composition is possible for instructions belonging to different
+      // basic blocks.
       int compose(int a, int b) {
-        if (a == -1) return b;
-        if (b == -1) return a;
+        if (a == -1) return b;  // Null case for a
+        if (b == -1) return a;  // Null case for b
         // only ever compose instructions within a BB
         assert(a == b);
         return a;
@@ -159,7 +159,7 @@ class LICM : public LoopPass {
     }
 
     // Go through worklist hoisting when appropriate. When hoisting, put uses
-    // back in the worklist as they may become hoistable
+    // back in the worklist as they may become 'hoistable' :)
     while (!worklist.empty()) {
       Instruction* inst = worklist.front();
       worklist.pop();
