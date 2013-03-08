@@ -175,22 +175,31 @@ class LICM : public LoopPass {
       }
     }
 
+    // Track whether we modified the code
+    bool modified = false;
+
+#if 0
     std::cerr << "To hoist:\n";
+#endif
     for (std::vector<Instruction*>::iterator it = toHoist.begin(),
          end = toHoist.end(); it != end; ++it) {
       Instruction* inst = *it;
       inst->removeFromParent();
       inst->insertBefore(preHeader->getTerminator());
+      modified = true;
+#if 0
       inst->print(errs());
       std::cerr << "\n";
+#endif
     }
 
-    return !toHoist.empty();
+    // Return true if some instructions were hoisted from the loop
+    return modified;
   }
 
   virtual void getAnalysisUsage(AnalysisUsage& AU) const {
-    // TODO???
-    AU.setPreservesAll();
+    AU.setPreservesCFG();
+    AU.addRequired<LoopInfo>(); // Helps us by inserting preheaders
   }
 
 };

@@ -1,32 +1,37 @@
 // 15-745 S13 Assignment 2: dead-code-elimination.cpp
 // Group: nkoorapa, pdixit
-// Description : This file implements dead-code-elimination analysis by exploiting the   // TODO : Update this at end .. Also change 'Liveness' to something else
-//               generic framework in dataflow.h This also serves as an example
-//               of how to use the generic framework. 
+// Description : This file implements dead-code-elimination analysis by 
+//               exploiting the generic framework in dataflow.h 
 //
-//               Following things should be noticed when refering to it as an 
-//               example when writing another pass : 
-// 
-//               1. Tranfer-function parameter type is defined as GKPair which 
-//                  is pair of gen and kill sets that can be associated to each
-//                  instruction or basic block
+//               Following steps were taken to use the generic framework :
 //
-//               2. DeadCodeEliminationDF is the main dataflow class which extends DataFlow 
-//                  with GKPair and uses constructor parameters to indicate that
-//                  DeadCodeElimination is a BACKWARDS analysis with emptySet as the TOP 
-//                  and boundary values.
+//               1. Domain is a bit vector of all instructions, initially 
+//                  all set to empty to indicate all instructions are dead.
+//                  Then dataflow framework sets bits during it's iteration
+//                  if an instruction is definitely live or one of it's uses
+//                  is live. An instruction is definitely live if it has 
+//                  side effects.
+//
+//               2. Tranfer-function parameter type is defined as a struct 
+//                  containing a bool definitely_live, an int index and a 
+//                  bitvector of uses of the instruction. Index points to index
+//                  of the instruction in bitvector
+//
+//               3. DeadCodeEliminationDF is the main dataflow class which 
+//                  extends DataFlow with deadcode_params_t and uses constructor
+//                  parameters to indicate that DeadCodeElimination is a 
+//                  BACKWARDS analysis with emptySet as the TOP and boundary.
 //          
-//               3. Virtual function transferFunctionParams is implemented to 
-//                  calculate output = ( input - kill ) U gen
+//               4. Virtual function transferFunctionParams is implemented to 
+//                  calculate set the 'live' bit for an instruction if either 
+//                  it is definitely live or any of it's uses is live.
 //
-//               4. Virtual function compose is implemented to calculate gen
-//                  & kill sets of consecutive instructions (or instr & block)
+//               5. Virtual function compose is not implemented
 //              
-//               5. Meet operator function is overriden to give union
+//               6. Meet operator function is overriden to give union
 //
-//               6. getTFParams is overriden to return gen and kill sets for 
-//                  each instruction based on how they are defined for
-//                  dead-code-elimination
+//               7. getTFParams is overriden to return definitely_live, uses,
+//                  and index for each instruction.
 // 
 ///////////////////////////////////////////////////////////////////////////////
 
@@ -49,87 +54,76 @@ class DeadCodeElimination : public FunctionPass {
   static char ID;
 
   // Map from a variable to it's index in vector of variables
-  typedef std::map<Value*, int> idxmap_t;
-  //typedef std::pair<BitVector, BitVector> GKPair;
+  typedef std::map<Instruction*, int> idxmap_t;
 
-  // For one instruction, it's Transfer-Function parameter are
-  // it's index in the bit vector, and users
+  // Parameters for one instruction,
   // These can be computed and cached and used again and again
   typedef struct {
-    bool definitely_live;
-    int index;
-    BitVector uses;
-  } deadcode_params_inst_t;
+    bool definitely_live;   // True if instr affects results or has side effects
+    int index;              // Index of current instr into input bit vector
+    BitVector uses;         // Bit Vector of instructions which use current instr
+  } deadcode_params_t;
 
-  // Generic Transfer-Function parameter for basic-blocks
-  // (one element per instr)
-  typedef std::vector<deadcode_params_inst_t> deadcode_params_t;
-
-  /* Composeable parameters where parameters are a Gen/Kill pair */
+  /* Inherit the dataflow framework with deadcode_params_t as template parameter */
   class DeadCodeEliminationDF : public DataFlow<deadcode_params_t> {
     private:
       idxmap_t* index_map;
 
     public:
+
+      /* Constructor */
       DeadCodeEliminationDF(idxmap_t* index_map) :
         DataFlow<deadcode_params_t>(emptySet(index_map->size()),
                          emptySet(index_map->size()), BACKWARDS) {
           this->index_map = index_map;
-
-#if 0
-          for (idxmap_t::iterator it = map->begin(), end =
-              map->end(); it != end; ++it) {
-            fprintf(stderr, "%p -> %d\n", it->first, it->second);
-            it->first->print(errs());
-            fprintf(stderr, "\n");
-          }
-#endif
       }
       ~DeadCodeEliminationDF() {}
 
-      // Override. (in - kill) U gen
-      // TODO : Make it take reference to params
+      // Set the live bit if an instruction is definitely live or another instruction
+      // which uses it is live during some iteration of dataflow
       BitVector transferFunctionParams(deadcode_params_t params, BitVector input) {
-        // Set input bits for all the uses which are already set:
-        for (deadcode_params_t::iterator iter = params.begin(),
-          end = params.end(); iter != end; ++iter) {
 
-          deadcode_params_inst_t* temp = &(*iter);
-
-          // If input is set for an index or it is definitely live,
-          // set the use bits in input
-          if (temp->definitely_live || input[temp->index] ||
-              input.anyCommon(temp->uses)) {
-            input[temp->index] = true; // Ensures for definitely_live case
+        // If instruction is definitely live or any of it's uses is live
+        // set the live bit in input
+        if (params.definitely_live || input.anyCommon(params.uses)) {
+          input[params.index] = true; 
+        
+#if 0
+          if (params.definitely_live) {
+            fprintf (stderr, "Instruction is definitely live\n");
           }
+          else {
+            fprintf (stderr, "Some of the uses of instruction are live\n");
+          }
+#endif
+
         }
+               
         return input;
+      }
+
+      // Override to tell that analysis at block level is not useful for this dataflow
+      virtual bool composition_defined() {
+        return false;
       }
 
       // Override
       deadcode_params_t compose(deadcode_params_t a, deadcode_params_t b) {
-        // Concatenate the two vectors in reverse order :
-        // TODO : Review/test this part to ensure things are as expected.
-        // Within a block when iterating, we want to work in reverse order
-        b.insert(b.end(), a.begin(), a.end());
-        return b;
+        // Dummy return, it will not be use since we marked 
+        // composition_defined as false
+        return a;
       }
 
-      // Return parameters for an instruction:
+      // Override by initializing deadcode_params_t struct for each instruction
+      // definitely_live set based on conditions mentioned in handout
       deadcode_params_t getTFParams(Instruction* inst) {
         idxmap_t::iterator it;
-        deadcode_params_inst_t result;
-
-        // Value to return is a vector
-        deadcode_params_t ret_result;
+        deadcode_params_t result;
 
         // Identity transfer function (on no instructions)
         if (inst == NULL) {
-          // Empty vector for no instructions
-          return ret_result;
+          return result;
         }
-
-        // Initial values :
 
         // Definitely live case:
         if (isa<TerminatorInst>(inst) ||
@@ -141,28 +135,41 @@ class DeadCodeElimination : public FunctionPass {
           result.definitely_live = false;
         }
 
+        // Index :
         result.index = (*index_map)[inst];
 
+#if 0
         // Print the instruction :
-        //*//fprintf (stderr, "Instruction : ");
-        //*//inst->print(errs());
-        //*//fprintf (stderr, "\n");
+        fprintf (stderr, "Instruction : ");
+        inst->print(errs());
+        fprintf (stderr, "\n");
+#endif
 
         // Get the uses :
         result.uses = emptySet(index_map->size());
-        for (User::value_op_iterator iter = inst->value_op_begin(),
-            end = inst->value_op_end(); iter != end; ++iter) {
+        for (User::use_iterator iter = inst->use_begin(),
+            end = inst->use_end(); iter != end; ++iter) {
 
-          Value* use_inst = *iter;
+          Instruction* use_inst = (Instruction *) *iter;
           result.uses[(*index_map)[use_inst]] = true;
+
+#if 0
+          fprintf (stderr, "Uses : ");
+          use_inst->print(errs());
+          fprintf (stderr,"\n");
+#endif
+          
         }
 
-        // Push on vector and return it:
-        ret_result.push_back(result);
-        return (ret_result);
+#if 0
+        fprintf (stderr, "Done getting tfparams\n");
+#endif
+
+        // Return the parameters for the instruction:
+        return (result);
       }
 
-      // Override
+      // Override meet operator
       BitVector meet(BitVector left, const BitVector& right) {
         return left |= right;
       }
@@ -173,7 +180,7 @@ class DeadCodeElimination : public FunctionPass {
   virtual bool runOnFunction(Function& F) {
 
     // Make one pass through to find all variables.
-    std::vector<Value*> varList;
+    std::vector<Instruction*> varList;
     idxmap_t varMap;
 
     int idx = 0;
@@ -193,26 +200,32 @@ class DeadCodeElimination : public FunctionPass {
     DeadCodeEliminationDF ldf(&varMap);
     std::map<Instruction*, BitVector> result = ldf.doAnalysis(F);
 
-    // Print out the dead instructions :
+    // Get the vector containing live instructions :
     Instruction* first_inst = &(F.getEntryBlock().front());
 
     // At the end of analysis, bit vector before the first instr
     // contains live instruction - because of SSA representation.
     BitVector live_insts = result[first_inst];
 
+    bool modified = false;
+
+    // Print the dead instructions :
     for (unsigned i = 0; i < live_insts.size(); ++i) {
         if (live_insts[i] == false) {
-          varList[i]->print(errs());
-          errs()<< "\n";
+          modified = true;
+          Instruction *instr = varList[i];
+          instr->eraseFromParent();
+          //instr->print(errs());
+          //errs()<< "\n";
         }
     }
 
     // the incoming Function is modified.
-    return true;
+    return modified;
   }
 
   virtual void getAnalysisUsage(AnalysisUsage& AU) const {
-    AU.setPreservesAll();
+    AU.setPreservesCFG();
   }
 
  private:

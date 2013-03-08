@@ -94,6 +94,20 @@ class DataFlow {
   virtual Param_t compose(Param_t a, Param_t b) = 0;
   virtual BitVector meet(BitVector left, const BitVector& right) = 0;
 
+  // Override this function to return false if a compose is 
+  // not implemented
+  virtual bool composition_defined () {
+    return true;
+  }
+
+  // Some dataflow may not require values at each instruction boundary
+  // Only the final value may be of interest. 
+  // Override this function to skip the last pass to get final values 
+  // at each instruction boundary 
+  bool compute_value_per_instruction_boundary () {
+    return true;
+  }
+
   // The top level function. Call this to run the dataflow engine:
   std::map<Instruction*, BitVector> doAnalysis(Function& f);
 };
@@ -133,6 +147,8 @@ DataFlow<Param_t>::transferFunctionBB(BasicBlock* bb, BitVector input) {
   typename std::map<BasicBlock*, Param_t>::iterator it;
   typename std::map<Instruction*, Param_t>::iterator it2;
 
+  BitVector output;
+
   // If cached value of basic block TFParams is available, use that to quickly
   // get the output vector
   it = bbParamCache.find(bb);
@@ -145,25 +161,60 @@ DataFlow<Param_t>::transferFunctionBB(BasicBlock* bb, BitVector input) {
   // For example, gen and kill sets of instructions can be composed
   // to form gen and kill set for a basic-block. It is users responsibility
   // to define the composition function.
-  params = getTFParams(NULL);
-  for (BasicBlock::iterator iter = bb->begin(), end = bb->end();
-       iter != end; ++iter) {
+  if (composition_defined()) {
+    params = getTFParams(NULL);
+    for (BasicBlock::iterator iter = bb->begin(), end = bb->end();
+         iter != end; ++iter) {
 
-    Instruction* inst = iter;
-    Param_t instParam = getCachedTFParams(inst);
-    if (direction == FORWARDS) {
-      params = compose(params, instParam);
-    } else {
-      params = compose(instParam, params);
+      Instruction* inst = iter;
+      Param_t instParam = getCachedTFParams(inst);
+      if (direction == FORWARDS) {
+        params = compose(params, instParam);
+      } else {
+        params = compose(instParam, params);
+      }
     }
+   
+    // Cache the value
+    bbParamCache[bb] = params;
+
+    // With the TFParams now available, calculate the output vector using
+    // these and input vector.
+    return transferFunctionParams(params, input);
   }
 
-  // Cache the value
-  bbParamCache[bb] = params;
+  // If composition is not implemented (because it
+  // is not useful), iterate at individual instruction level:
 
-  // With the TFParams now available, calculate the output vector using
-  // these and input vector.
-  return transferFunctionParams(params, input);
+  // If direction is forward pass the input through the instructions :
+  if (direction == FORWARDS) {
+    for (BasicBlock::iterator iter = bb->begin(), end = bb->end();
+         iter != end; ++iter) {
+
+      Instruction* inst = iter;
+      Param_t instParam = getCachedTFParams(inst);
+
+      input = transferFunctionParams(instParam, input);
+    }
+  }
+  else { // Use reverse iterator for reverse dataflow
+    BasicBlock::InstListType& il = bb->getInstList();
+    for (BasicBlock::InstListType::reverse_iterator iter = il.rbegin(), 
+         end = il.rend(); iter != end; ++iter) {
+
+      Instruction* inst = &(*iter);
+      Param_t instParam = getCachedTFParams(inst);
+
+      //fprintf (stderr, "Instruction : ");
+      //inst->print(errs());
+      //fprintf (stderr, "\n");
+
+      input = transferFunctionParams(instParam, input);
+    }
+  }
+    
+  output = input;
+  return output;
 }
 
 // doAnalysis on the function class passed as input and return
@@ -259,9 +310,9 @@ DataFlow<Param_t>::doAnalysis(Function& f) {
         input = meet(input, bbStartEnd[*iter].first);
       }
 
-      fprintf (stderr, "\nItarating on basic block : \n");
-      bb->print(errs());
-      fprintf (stderr, "basic-block end\n\n");
+//      fprintf (stderr, "\nIterating on basic block : \n");
+//      bb->print(errs());
+//      fprintf (stderr, "basic-block end\n\n");
 
       // Apply transfer function to get output bit vector
       output = transferFunctionBB(bb, input);
