@@ -23,7 +23,7 @@ int main() {
     do {
 //        a[i] = 3 + a[i];
 //        b[i] = b[i] - 2;
-        a[i] = a[i] + b[i];
+//        a[i] = a[i] + b[i];
         c[i] = a[i] + b[i];
         i++;
     } while ( i < MAX_SIZE);
