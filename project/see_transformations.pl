@@ -1,6 +1,11 @@
 #!/usr/bin/perl
 
-my $cfile = "simd.c";
+my $cfile;
+if ($#ARGV < 0) {
+  $cfile = "simd.c";
+} else {
+  $cfile = $ARGV[0];
+}
 my $prefix = $cfile;
 $prefix =~ s/\.c//;
 my $bcfile = $prefix . ".bc";
@@ -8,7 +13,7 @@ my $llfile = $prefix . ".ll";
 
 # Add optimization options here in order
 #my @opt_options = ("-mem2reg", "-loop-simplify", "-simplifycfg", "-loop-idiom", "-lcssa", "-sink", "-load ./LoopVectorize.so -my-loop-vectorize -force-vector-width=4");
-my @opt_options = ("-mem2reg", "-loop-simplify", "-simplifycfg", "-loop-idiom", "-lcssa", "-sink", "-debug -loop-vectorize -force-vector-width=4");
+my @opt_options = ("-mem2reg", "-simplifycfg", "-debug -loop-vectorize -force-vector-width=4");
 
 
 # First do naive compilation to llvm ir:
