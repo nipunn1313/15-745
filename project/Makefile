@@ -10,6 +10,18 @@
 
 SHELL := bash
 
+
+#all: loop_pass.so
+all: LoopVectorize.so
+
+
+CXXFLAGS = -rdynamic $(shell llvm-config --cxxflags) -g -O0 -Wall -Werror
+
+%.so: %.o
+	$(CXX) -dylib -flat_namespace -shared $^ -o $@
+
+
+
 run: 
 	./run_simd.sh |& tee run_simd.log
 

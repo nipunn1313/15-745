@@ -19,12 +19,11 @@ int main() {
 //        c[i] = 0;
 //    }
 
-    i = 0;
-    do {
-        a[i] = a[i] + 1;
-        b[i] = b[i] - 2;
+    for (i = 0; i < MAX_SIZE; i++) {
+        //a[i] = a[i] + 1;
+        //b[i] = b[i] - 2;
         c[i] = a[i] + b[i];
-        i++;
-    } while ( i < MAX_SIZE);
+        //i++;
+    };
     return 0;
 }
