@@ -3,11 +3,7 @@
 
 #define MAX_SIZE 1000000
 
-int main() {
-    int *a = (int *) malloc (4 * MAX_SIZE);
-    int *b = (int *) malloc (4 * MAX_SIZE);
-    int *c = (int *) malloc (4 * MAX_SIZE);
-
+int foo(int* a, int* b, int* c) {
     int i;
 
     i = 0;
