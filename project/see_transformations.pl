@@ -1,11 +1,17 @@
 #!/usr/bin/perl
 
-my $cfile;
 if ($#ARGV < 0) {
-  $cfile = "simd.c";
-} else {
-  $cfile = $ARGV[0];
+  print "Need arg\n";
+  die;
 }
+
+my $cfile = $ARGV[0];
+
+my $opt_prefix = "/home/user/llvm-current/build-x86/Debug+Asserts/bin";
+if ($#ARGV > 0 && $ARGV[1] eq "old") {
+  $opt_prefix = "/home/user/llvm/llvm-3.2.install/bin";
+}
+
 my $prefix = $cfile;
 $prefix =~ s/\.c//;
 my $bcfile = $prefix . ".bc";
@@ -36,8 +42,8 @@ foreach my $new_option (@opt_options) {
     my $llvm_dis = $llvm_bc;
     $llvm_dis =~ s/.bc/.ll/;
 
-    print "opt $current_options -o $llvm_bc $bcfile\n";
-    `opt $current_options -o $llvm_bc $bcfile`;
+    print "$opt_prefix/opt $current_options -o $llvm_bc $bcfile\n";
+    `$opt_prefix/opt $current_options -o $llvm_bc $bcfile`;
     
     # Copy to a final optimized bitcode file
     `cp $llvm_bc $prefix.opt.bc`;
