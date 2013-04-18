@@ -19,9 +19,9 @@ my $llfile = $prefix . ".ll";
 
 # Add optimization options here in order
 #my @opt_options = ("-mem2reg", "-loop-simplify", "-simplifycfg", "-loop-idiom", "-lcssa", "-sink", "-load ./LoopVectorize.so -my-loop-vectorize -force-vector-width=4");
-my @opt_options = ("-mem2reg", "-O3", "-debug -loop-vectorize -force-vector-width=4");
-#my @opt_options = ("-mem2reg", "-loop-simplify", "-loop-idiom", "-sink", 
-#"-simplifycfg", "-O3", "-debug -loop-vectorize -force-vector-width=4");
+#my @opt_options = ("-mem2reg", "-debug -loop-vectorize -force-vector-width=4");
+my @opt_options = ("-mem2reg", "-loop-simplify", "-loop-idiom", "-sink", 
+"-simplifycfg", "-O3", "-debug -loop-vectorize -force-vector-width=4");
 
 
 # First do naive compilation to llvm ir:

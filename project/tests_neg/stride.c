@@ -8,7 +8,7 @@ int foo(int* a, int* b, int* c, int len) {
 
     i = 0;
     do {
-        c[i] = 2*c[i];//c[i-24] + c[i-16];
+        c[i] = c[i-24] + c[i-16];
         i++;
     } while ( i < len);
     return 0;
