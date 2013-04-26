@@ -2580,7 +2580,8 @@ bool LoopVectorizationLegality::canVectorizeMemory() {
       for (MI = Reads.begin(), ME = Reads.end(); MI != ME; ++MI) {
         gepR = dyn_cast_or_null<GetElementPtrInst>(MI->first);
         // Verify that reads occur on the same array as writes
-        if (gepW->getPointerOperand() != gepR->getPointerOperand() ||
+        if (!gepR ||
+            gepW->getPointerOperand() != gepR->getPointerOperand() ||
             !isConsecutivePtr(MI->first)) {
           allSafeAccesses = false;
           break;
@@ -2590,10 +2591,11 @@ bool LoopVectorizationLegality::canVectorizeMemory() {
             gepR->getOperand(gepR->getNumOperands() - 1));
         const SCEV *Diff = SE->getMinusSCEV(scevW, scevR);
         const SCEVConstant* diffConst = dyn_cast<SCEVConstant>(Diff);
+        // Since they're consecutive, the diff better be a constant
+        assert(diffConst);
         // Verify that the offset between read/write is constant and large
         // enough to warrant safe vectorizing
-        if (!diffConst ||
-            abs64(diffConst->getValue()->getSExtValue()) < maxElems) {
+        if (abs64(diffConst->getValue()->getSExtValue()) < maxElems) {
           allSafeAccesses = false;
           break;
         }
