@@ -2552,6 +2552,62 @@ bool LoopVectorizationLegality::canVectorizeMemory() {
     return true;
   }
 
+  // Biggest vectorized access possible, vector width * unroll factor.
+  // TODO: We're being very pessimistic here, find a way to know the
+  // real access width before getting here.
+  unsigned MaxByteWidth = (TTI->getRegisterBitWidth(true) / 8) *
+                           TTI->getMaximumUnrollFactor();
+  DEBUG(dbgs() << "LV: MaxByteWidth == " << MaxByteWidth << "\n");
+
+  //Test to see if all reads/writes are in the same array. If so, we can
+  //statically determine vectorize safety if the stride >= MaxByteWidth
+  if (ReadWrites.size() == 1) {
+    Value* rw = ReadWrites.front().first;
+    GetElementPtrInst* gepW = dyn_cast_or_null<GetElementPtrInst>(rw);
+    if (gepW && isConsecutivePtr(rw)) {
+      const SCEV *scevW = SE->getSCEV(
+          gepW->getOperand(gepW->getNumOperands() - 1));
+      const PointerType *ptrType =
+        dyn_cast<PointerType>(gepW->getPointerOperandType());
+      assert(ptrType);
+      const Type* elemType = ptrType->getElementType();
+      unsigned elemByteWidth = elemType->getIntegerBitWidth() / 8;
+      unsigned maxElems = MaxByteWidth / elemByteWidth;
+
+      bool allSafeAccesses = true;
+      AliasMap::iterator MI, ME;
+      GetElementPtrInst* gepR;
+      for (MI = Reads.begin(), ME = Reads.end(); MI != ME; ++MI) {
+        gepR = dyn_cast_or_null<GetElementPtrInst>(MI->first);
+        // Verify that reads occur on the same array as writes
+        if (gepW->getPointerOperand() != gepR->getPointerOperand() ||
+            !isConsecutivePtr(MI->first)) {
+          allSafeAccesses = false;
+          break;
+        }
+
+        const SCEV *scevR = SE->getSCEV(
+            gepR->getOperand(gepR->getNumOperands() - 1));
+        const SCEV *Diff = SE->getMinusSCEV(scevW, scevR);
+        const SCEVConstant* diffConst = dyn_cast<SCEVConstant>(Diff);
+        // Verify that the offset between read/write is constant and large
+        // enough to warrant safe vectorizing
+        if (!diffConst ||
+            abs64(diffConst->getValue()->getSExtValue()) < maxElems) {
+          allSafeAccesses = false;
+          break;
+        }
+      }
+
+      if (allSafeAccesses) {
+        DEBUG(dbgs() <<
+            "LV: All accesses are in the same array and reads are >= "
+            << MaxByteWidth << " bytes from the write, so it is safe\n");
+        return true;
+      }
+    }
+  }
+
   // Find pointers with computable bounds. We are going to use this information
   // to place a runtime bound check.
   bool CanDoRT = true;
@@ -2590,11 +2646,6 @@ bool LoopVectorizationLegality::canVectorizeMemory() {
 
   bool NeedRTCheck = false;
 
-  // Biggest vectorized access possible, vector width * unroll factor.
-  // TODO: We're being very pessimistic here, find a way to know the
-  // real access width before getting here.
-  unsigned MaxByteWidth = (TTI->getRegisterBitWidth(true) / 8) *
-                           TTI->getMaximumUnrollFactor();
   // Now that the pointers are in two lists (Reads and ReadWrites), we
   // can check that there are no conflicts between each of the writes and
   // between the writes to the reads.

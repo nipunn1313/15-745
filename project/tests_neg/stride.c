@@ -8,7 +8,8 @@ int foo(int* a, int* b, int* c, int len) {
 
     i = 0;
     do {
-        c[i] = c[i-24] + c[i-16];
+        c[i] = c[i-8] + c[i+32];
+        //c[i] = c[i-64] + c[i-128];
         i++;
     } while ( i < len);
     return 0;
