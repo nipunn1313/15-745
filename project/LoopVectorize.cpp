@@ -662,7 +662,7 @@ struct LoopVectorize : public LoopPass {
     AA = getAnalysisIfAvailable<AliasAnalysis>();
     TLI = getAnalysisIfAvailable<TargetLibraryInfo>();
 
-    DEBUG(dbgs() << "LV: Checking a wonderful loop in \"" <<
+    DEBUG(dbgs() << "LV: Checking a loop in \"" <<
           L->getHeader()->getParent()->getName() << "\"\n");
 
     // Check if it is legal to vectorize the loop.
@@ -2563,15 +2563,16 @@ bool LoopVectorizationLegality::canVectorizeMemory() {
   //statically determine vectorize safety if the stride >= MaxByteWidth
   if (ReadWrites.size() == 1) {
     Value* rw = ReadWrites.front().first;
+    StoreInst *ST = dyn_cast<StoreInst>(ReadWrites.front().second);
+    assert(ST);
+
     GetElementPtrInst* gepW = dyn_cast_or_null<GetElementPtrInst>(rw);
-    if (gepW && isConsecutivePtr(rw)) {
+    int incDirW; // 1 or -1 depending on increment direction
+    if (gepW && (incDirW = isConsecutivePtr(rw))) {
       const SCEV *scevW = SE->getSCEV(
           gepW->getOperand(gepW->getNumOperands() - 1));
-      const PointerType *ptrType =
-        dyn_cast<PointerType>(gepW->getPointerOperandType());
-      assert(ptrType);
-      const Type* elemType = ptrType->getElementType();
-      unsigned elemByteWidth = elemType->getIntegerBitWidth() / 8;
+      const Type* elemType = ST->getValueOperand()->getType();
+      unsigned elemByteWidth = elemType->getPrimitiveSizeInBits() / 8;
       unsigned maxElems = MaxByteWidth / elemByteWidth;
 
       bool allSafeAccesses = true;
@@ -2579,10 +2580,11 @@ bool LoopVectorizationLegality::canVectorizeMemory() {
       GetElementPtrInst* gepR;
       for (MI = Reads.begin(), ME = Reads.end(); MI != ME; ++MI) {
         gepR = dyn_cast_or_null<GetElementPtrInst>(MI->first);
-        // Verify that reads occur on the same array as writes
+        // Verify that reads occur on the same array as writes and the
+        // direction of increment is the same
         if (!gepR ||
             gepW->getPointerOperand() != gepR->getPointerOperand() ||
-            !isConsecutivePtr(MI->first)) {
+            isConsecutivePtr(MI->first) != incDirW) {
           allSafeAccesses = false;
           break;
         }
