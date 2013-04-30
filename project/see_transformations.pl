@@ -65,3 +65,8 @@ foreach my $new_option (@opt_options) {
 
 `rm $previous_file`;
 
+# Run the valgrind script:
+print "*********************************************************************\n";
+print "Running valgrind\n";
+print "*********************************************************************\n";
+`./compile_and_run_valgrind.sh $prefix`;
