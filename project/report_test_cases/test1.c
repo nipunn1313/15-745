@@ -1,20 +1,17 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define MAX_SIZE 1000000
+#define MAX_SIZE 10000000
 
 int a[MAX_SIZE];
-int b[MAX_SIZE];
-int c[MAX_SIZE];
 
 int main() {
     int i;
 
-    i = 0;
+    i = 32;
     do {
-        c[i] = c[i-16] + c[i+32];
-        //c[i] = c[i-64] + c[i-128];
+        a[i] = a[i-32] + a[i+32];
         i++;
-    } while ( i < MAX_SIZE);
+    } while ( i + 32 < MAX_SIZE);
     return 0;
 }

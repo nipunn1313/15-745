@@ -1,5 +1,6 @@
 #!/usr/bin/perl
 
+use strict;
 if ($#ARGV < 0) {
   print "Need arg\n";
   die;
@@ -15,23 +16,30 @@ if ($#ARGV > 0 && $ARGV[1] eq "old") {
 my $prefix = $cfile;
 $prefix =~ s/\.c//;
 my $bcfile = $prefix . ".bc";
+my $orig_bcfile = $prefix . ".bc";
 my $llfile = $prefix . ".ll";
 
 # Add optimization options here in order
-#my @opt_options = ("-mem2reg", "-loop-simplify", "-simplifycfg", "-loop-idiom", "-lcssa", "-sink", "-load ./LoopVectorize.so -my-loop-vectorize -force-vector-width=4");
-#my @opt_options = ("-mem2reg", "-debug -loop-vectorize -force-vector-width=4");
-my @opt_options = ("-mem2reg", "-loop-simplify", "-loop-idiom", "-sink", 
-"-simplifycfg", "-O3", "-debug -loop-vectorize -force-vector-width=4");
+#my @opt_options = ("-mem2reg -loop-simplify -simplifycfg -loop-idiom -lcssa -sink -load ./LoopVectorize.so -my-loop-vectorize -force-vector-width=4");
+#my @opt_options = ("-mem2reg -debug -loop-vectorize -force-vector-width=4");
+my @opt_options = ("-mem2reg", "-loop-simplify", " -loop-idiom", " -sink", " -simplifycfg", " -O3", " -debug -loop-vectorize -force-vector-width=4");
+#my @opt_options = ("-mem2reg", "-loop-simplify", " -loop-idiom", " -sink", " -simplifycfg", " -O3");
+
+my $opt_basic_options = " -mem2reg -loop-simplify -loop-idiom -sink -simplifycfg -O3 ";
 
 
 # First do naive compilation to llvm ir:
 `clang -O0 -emit-llvm -o $bcfile -c $cfile`;
 `llvm-dis $bcfile`;
 
+`cp $bcfile $orig_bcfile`;
+
 # Now run the options one by one and show tkdiff 
 my $current_options = "";
 
-my $previous_file = $llfile;
+my $previous_dis_file = $llfile;
+
+my $llvm_bc;
 
 foreach my $new_option (@opt_options) {
     $current_options .= " $new_option";
@@ -40,7 +48,7 @@ foreach my $new_option (@opt_options) {
     $file_string =~ s/-//g;
     $file_string =~ s/\///g;
     $file_string =~ s/ +/./g;
-    my $llvm_bc =  $prefix . "$file_string.bc" ;
+    $llvm_bc =  $prefix . "$file_string.bc" ;
     my $llvm_dis = $llvm_bc;
     $llvm_dis =~ s/.bc/.ll/;
 
@@ -56,14 +64,19 @@ foreach my $new_option (@opt_options) {
     # Remove the intermediate bit-code:
     `rm $llvm_bc`;
 
-    print "tkdiff $previous_file $llvm_dis\n";
-    `tkdiff $previous_file $llvm_dis`;
+    print "tkdiff $previous_dis_file $llvm_dis\n";
+    `tkdiff $previous_dis_file $llvm_dis`;
 
-    `rm $previous_file`;
-    $previous_file = $llvm_dis;
-}
+    `rm $previous_dis_file`;
+    $previous_dis_file = $llvm_dis;
+}     
 
-`rm $previous_file`;
+## Create a base line optimized version :
+print "Creating baseline version using basic options\n";
+print "$opt_prefix/opt $opt_basic_options -o $llvm_bc $orig_bcfile\n";
+`$opt_prefix/opt $opt_basic_options -o $llvm_bc $orig_bcfile ; mv $llvm_bc $orig_bcfile`;
+
+`rm $previous_dis_file`;
 
 # Run the valgrind script:
 print "*********************************************************************\n";

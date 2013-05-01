@@ -16,3 +16,10 @@ echo "***************************************************************"
 
 echo "valgrind --tool=lackey ./${test}.opt"
 valgrind --tool=lackey ./${test}.opt
+
+#echo "Comparing times now "
+#echo "Optimized :"
+#time ./${test}.opt
+#
+#echo "Unoptimized :"
+#time ./${test}.unopt

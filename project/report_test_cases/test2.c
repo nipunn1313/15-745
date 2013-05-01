@@ -4,7 +4,6 @@
 #define MAX_SIZE 1000000
 
 int a[MAX_SIZE];
-int b[MAX_SIZE];
 int c[MAX_SIZE];
 
 int main() {
@@ -15,6 +14,6 @@ int main() {
         c[i] = a[i] + a[i+2];
         //c[i] = c[i-64] + c[i-128];
         i++;
-    } while ( i < MAX_SIZE);
+    } while ( i + 2 < MAX_SIZE);
     return 0;
 }

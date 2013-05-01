@@ -1,1 +1,5 @@
-Doing multiple writes
+Optimized by our code
+
+Optimized with RT check with old code
+
+But no improvement because RT check takes wrong direction (conservative direction) in their code
